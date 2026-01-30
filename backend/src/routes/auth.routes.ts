@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
+import dotenv from 'dotenv';
 import { generateJWT } from '../utils/jwt';
 import { AppError } from '../middlewares/errorHandler';
 import { adminAuth } from '../middlewares/auth.middleware';
 import { logger } from '../utils/logger';
+
+// 환경 변수 로드
+dotenv.config();
 
 export const authRouter = Router();
 
@@ -29,9 +33,15 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       email: email,
       emailLower: email?.toLowerCase(),
       passwordLength: password?.length,
+      passwordReceived: password,
+      passwordExpected: defaultPassword,
+      passwordMatch: password === defaultPassword,
       allowedEmails: allowedEmails,
       allowedEmailsCount: allowedEmails.length,
+      allowedEmailsRaw: allowedEmailsRaw,
       defaultPassword: defaultPassword ? 'SET' : 'NOT SET',
+      env_ALLOWED_ADMIN_EMAILS: process.env.ALLOWED_ADMIN_EMAILS,
+      env_ADMIN_PASSWORD: process.env.ADMIN_PASSWORD ? 'SET' : 'NOT SET',
     });
     
     if (!email) {
