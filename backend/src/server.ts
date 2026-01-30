@@ -40,30 +40,42 @@ const allowedOrigins = process.env.FRONTEND_URL
 
 app.use(cors({
   origin: (origin, callback) => {
-    // 개발 환경에서는 모든 origin 허용
-    if (process.env.NODE_ENV === 'development') {
-      callback(null, true);
-      return;
-    }
-    
     // origin이 없으면 (예: Postman, curl 등) 허용
     if (!origin) {
       callback(null, true);
       return;
     }
     
-    // 프로덕션에서는 허용된 origin만 허용
-    if (allowedOrigins.includes(origin)) {
+    // GitHub Pages 허용
+    if (origin === 'https://ajinnovationpart-dev.github.io') {
+      logger.info(`✅ CORS allowed: ${origin}`);
       callback(null, true);
-    } else {
-      // ngrok을 통한 접근도 허용 (ngrok 도메인은 동적으로 변경될 수 있음)
-      if (origin.includes('ngrok-free.dev') || origin.includes('ngrok.io')) {
-        callback(null, true);
-        return;
-      }
-      logger.warn(`CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      return;
     }
+    
+    // ngrok을 통한 접근도 허용 (ngrok 도메인은 동적으로 변경될 수 있음)
+    if (origin.includes('ngrok-free.dev') || origin.includes('ngrok.io')) {
+      logger.info(`✅ CORS allowed (ngrok): ${origin}`);
+      callback(null, true);
+      return;
+    }
+    
+    // 허용된 origin 목록 확인
+    if (allowedOrigins.includes(origin)) {
+      logger.info(`✅ CORS allowed: ${origin}`);
+      callback(null, true);
+      return;
+    }
+    
+    // 개발 환경에서는 모든 origin 허용
+    if (process.env.NODE_ENV === 'development') {
+      logger.info(`✅ CORS allowed (dev mode): ${origin}`);
+      callback(null, true);
+      return;
+    }
+    
+    logger.warn(`❌ CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
