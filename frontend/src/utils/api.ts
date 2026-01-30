@@ -31,6 +31,7 @@ export const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true', // ngrok 브라우저 경고 페이지 건너뛰기
   },
 })
 
