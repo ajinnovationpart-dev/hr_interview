@@ -10,8 +10,11 @@ import AuthLoginPage from './pages/AuthLoginPage'
 import { useAuthStore } from './stores/authStore'
 
 function App() {
+  // GitHub Pages를 위한 base 경로 설정
+  const basename = import.meta.env.BASE_URL || '/'
+  
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/auth/login" element={<AuthLoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />

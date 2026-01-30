@@ -14,7 +14,8 @@ export function AuthCallbackPage() {
     
     if (!token) {
       message.error('인증 토큰이 없습니다')
-      navigate('/auth/login')
+      const basename = import.meta.env.BASE_URL || '/'
+      navigate(`${basename}auth/login`)
       return
     }
 
@@ -35,7 +36,8 @@ export function AuthCallbackPage() {
       .catch((error) => {
         console.error('Auth error:', error)
         message.error('인증에 실패했습니다')
-        navigate('/auth/login')
+        const basename = import.meta.env.BASE_URL || '/'
+        navigate(`${basename}auth/login`)
       })
   }, [searchParams, navigate, setAuth])
 
