@@ -17,23 +17,39 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
     
     // 간단한 검증 (실제로는 더 강력한 인증 필요)
-    const allowedEmails = (process.env.ALLOWED_ADMIN_EMAILS || '').split(',').map(e => e.trim());
+    const allowedEmails = (process.env.ALLOWED_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
     const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    
+    // 디버깅 로그
+    logger.info('🔐 Login attempt:', {
+      email: email,
+      emailLower: email?.toLowerCase(),
+      passwordLength: password?.length,
+      allowedEmails: allowedEmails,
+      allowedEmailsCount: allowedEmails.length,
+      defaultPassword: defaultPassword ? 'SET' : 'NOT SET',
+    });
     
     if (!email) {
       throw new AppError(400, '이메일을 입력해주세요');
     }
     
+    const emailLower = email.toLowerCase();
+    
     // 허용된 이메일 확인 (또는 HR_EMAIL과 비교)
     const hrEmail = process.env.HR_EMAIL || 'hr@ajnetworks.co.kr';
-    if (allowedEmails.length > 0 && !allowedEmails.includes(email.toLowerCase())) {
+    if (allowedEmails.length > 0 && !allowedEmails.includes(emailLower)) {
+      logger.warn(`❌ Email not allowed: ${emailLower}, Allowed: ${allowedEmails.join(', ')}`);
       throw new AppError(403, '접근 권한이 없습니다');
     }
     
     // 비밀번호 확인 (간단한 방식)
     if (password !== defaultPassword) {
+      logger.warn(`❌ Password mismatch. Expected length: ${defaultPassword.length}, Received length: ${password?.length}`);
       throw new AppError(401, '비밀번호가 일치하지 않습니다');
     }
+    
+    logger.info(`✅ Login successful for: ${emailLower}`);
 
     const accessToken = generateJWT({
       email: email.toLowerCase(),
