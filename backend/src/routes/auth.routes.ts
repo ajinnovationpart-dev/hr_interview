@@ -17,7 +17,11 @@ authRouter.post('/login', async (req: Request, res: Response) => {
     const { email, password } = req.body;
     
     // 간단한 검증 (실제로는 더 강력한 인증 필요)
-    const allowedEmails = (process.env.ALLOWED_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+    const allowedEmailsRaw = process.env.ALLOWED_ADMIN_EMAILS || '';
+    const allowedEmails = allowedEmailsRaw
+      .split(',')
+      .map(e => e.trim().toLowerCase())
+      .filter(e => e.length > 0); // 빈 문자열 제거
     const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
     
     // 디버깅 로그
