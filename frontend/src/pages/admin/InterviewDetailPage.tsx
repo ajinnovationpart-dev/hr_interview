@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Table, Tag, Button, Space, Descriptions, message } from 'antd'
+import { Card, Table, Tag, Button, Space, Descriptions } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { api } from '../../utils/api'
 import type { ColumnsType } from 'antd/es/table'
