@@ -27,12 +27,29 @@ const getApiUrl = () => {
 
 const API_URL = getApiUrl()
 
+// 디버깅: API URL 로그 출력 (프로덕션에서는 제거 가능)
+if (import.meta.env.DEV) {
+  console.log('🔧 API URL:', API_URL)
+  console.log('🔧 VITE_API_URL:', import.meta.env.VITE_API_URL)
+}
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': 'true', // ngrok 브라우저 경고 페이지 건너뛰기
   },
+})
+
+// Request interceptor: 로그 추가
+api.interceptors.request.use((config) => {
+  console.log('📤 API Request:', {
+    method: config.method?.toUpperCase(),
+    url: config.url,
+    baseURL: config.baseURL,
+    fullURL: `${config.baseURL}${config.url}`,
+  })
+  return config
 })
 
 // Request interceptor: Add auth token

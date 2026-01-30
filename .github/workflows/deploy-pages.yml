@@ -34,8 +34,10 @@ jobs:
       - name: Build
         working-directory: ./frontend
         env:
-          VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://uncognizant-restrainedly-leila.ngrok-free.dev/' }}
-        run: npm run build
+          VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://uncognizant-restrainedly-leila.ngrok-free.dev' }}
+        run: |
+          echo "Building with VITE_API_URL: $VITE_API_URL"
+          npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
