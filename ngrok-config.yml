@@ -1,0 +1,13 @@
+version: "2"
+authtoken: # ngrok authtoken은 ngrok dashboard에서 확인하거나 ngrok config add-authtoken으로 설정
+tunnels:
+  # 기존 3030 포트 터널 (유지)
+  tunnel-3030:
+    addr: 3030
+    proto: http
+    # subdomain을 지정하면 고정 URL 사용 가능 (유료 플랜 필요)
+    
+  # 새로운 3000 포트 터널 (추가)
+  tunnel-3000:
+    addr: 3000
+    proto: http
