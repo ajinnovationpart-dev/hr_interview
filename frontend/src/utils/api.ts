@@ -5,9 +5,14 @@ import { useAuthStore } from '../stores/authStore'
 const getApiUrl = () => {
   // 환경 변수가 있으면 사용
   if (import.meta.env.VITE_API_URL) {
-    const apiUrl = import.meta.env.VITE_API_URL
+    let apiUrl = import.meta.env.VITE_API_URL
     // URL이 /로 끝나면 제거
-    return apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl
+    apiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl
+    // /api가 없으면 추가
+    if (!apiUrl.endsWith('/api')) {
+      apiUrl = `${apiUrl}/api`
+    }
+    return apiUrl
   }
   
   // 현재 호스트가 localhost가 아니면 같은 IP의 3000 포트 사용
