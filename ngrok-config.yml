@@ -1,5 +1,5 @@
 version: "2"
-authtoken: # ngrok authtoken은 ngrok dashboard에서 확인하거나 ngrok config add-authtoken으로 설정
+authtoken: 38x4u9tBCiNkPolSf5HRaW6WoAG_2FL234EbsisVzKyiTKsW6
 tunnels:
   # 기존 3030 포트 터널 (유지)
   tunnel-3030:
