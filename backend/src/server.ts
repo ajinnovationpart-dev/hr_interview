@@ -36,10 +36,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet());
-
-// OPTIONS 요청을 먼저 처리 (CORS preflight)
-app.options('*', cors());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // CORS 설정 (개발 환경에서는 모든 origin 허용)
 const allowedOrigins = process.env.FRONTEND_URL 
@@ -150,11 +150,25 @@ if (process.env.A_BACKEND_ENABLED === 'true') {
       logger.info(`[A Backend Proxy] ${req.method} ${req.url} → ${aBackendUrl}${req.url.replace('/api/a', '/api')}`);
     },
     onProxyRes: (proxyRes, req, res) => {
+      // CORS 헤더를 프록시 응답에 추가
+      const origin = req.headers.origin;
+      if (origin) {
+        proxyRes.headers['Access-Control-Allow-Origin'] = origin;
+        proxyRes.headers['Access-Control-Allow-Credentials'] = 'true';
+        proxyRes.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, PATCH, OPTIONS';
+        proxyRes.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning';
+      }
       logger.debug(`[A Backend Proxy] Response: ${proxyRes.statusCode} for ${req.url}`);
     },
     onError: (err, req, res) => {
       logger.error(`[A Backend Proxy] Error: ${err.message} for ${req.url}`);
       if (!res.headersSent) {
+        // CORS 헤더 추가
+        const origin = req.headers.origin;
+        if (origin) {
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Access-Control-Allow-Credentials', 'true');
+        }
         res.status(502).json({
           success: false,
           message: 'A backend 서버에 연결할 수 없습니다',
