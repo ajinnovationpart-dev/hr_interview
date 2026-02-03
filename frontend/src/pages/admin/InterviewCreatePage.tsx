@@ -353,7 +353,7 @@ export function InterviewCreatePage() {
                       style={{ width: '100%' }}
                       maxTagCount="responsive"
                       tagRender={(props) => {
-                        const { label, value, closable, onClose } = props
+                        const { value, closable, onClose } = props
                         const interviewer = interviewers?.find((iv: any) => iv.interviewer_id === value)
                         return (
                           <Tag

@@ -10,7 +10,6 @@ import {
   Select,
   Space,
   Button,
-  Tag,
   Progress,
 } from 'antd';
 import {
@@ -33,7 +32,7 @@ export function StatisticsPage() {
   ]);
   const [department, setDepartment] = useState<string>('');
 
-  const { data: overviewData, isLoading: overviewLoading } = useQuery({
+  const { data: overviewData } = useQuery({
     queryKey: ['statistics', 'overview', dateRange, department],
     queryFn: async () => {
       const params = new URLSearchParams();

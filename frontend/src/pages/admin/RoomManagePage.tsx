@@ -18,7 +18,6 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
-  CalendarOutlined,
 } from '@ant-design/icons';
 import { api } from '../../utils/api';
 import type { ColumnsType } from 'antd/es/table';

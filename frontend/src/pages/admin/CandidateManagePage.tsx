@@ -11,12 +11,10 @@ import {
   Form,
   Tag,
   message,
-  Popconfirm,
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined,
   SearchOutlined,
   UserOutlined,
 } from '@ant-design/icons';

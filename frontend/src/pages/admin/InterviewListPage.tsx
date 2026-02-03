@@ -4,7 +4,6 @@ import { Card, Table, Button, Tag, Space, Input, Select, DatePicker } from 'antd
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
 import { api } from '../../utils/api'
-import dayjs from 'dayjs'
 import type { ColumnsType } from 'antd/es/table'
 
 const { RangePicker } = DatePicker

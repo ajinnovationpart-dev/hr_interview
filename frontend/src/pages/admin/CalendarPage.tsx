@@ -42,7 +42,7 @@ export function CalendarPage() {
     },
   });
 
-  const { data: calendarData, isLoading } = useQuery({
+  const { data: calendarData } = useQuery({
     queryKey: ['calendar', dateRange, interviewerId, roomId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -80,7 +80,7 @@ export function CalendarPage() {
     const listData = getListData(value);
     return (
       <ul className="events" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {listData.map((item, index) => (
+        {listData.map((item: { type: string; content: string; event: any }, index: number) => (
           <li key={index} style={{ cursor: 'pointer' }}>
             <Badge
               status={item.type as any}

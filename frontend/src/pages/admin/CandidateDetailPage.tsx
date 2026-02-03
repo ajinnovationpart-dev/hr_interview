@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Card,
   Descriptions,
@@ -8,7 +8,6 @@ import {
   Space,
   Button,
   Timeline,
-  message,
   Spin,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
@@ -36,7 +35,6 @@ const statusLabels: Record<string, string> = {
 export function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['candidate', id],
