@@ -8,16 +8,25 @@ const getABackendApiUrl = () => {
     let apiUrl = import.meta.env.VITE_API_URL
     // URL이 /로 끝나면 제거
     apiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl
-    // /api/a가 이미 포함되어 있으면 그대로 사용
-    if (apiUrl.endsWith('/api/a')) {
-      return apiUrl
+    
+    // 모든 /api/a 중복 제거 (여러 번 반복될 수 있음)
+    while (apiUrl.endsWith('/api/a')) {
+      apiUrl = apiUrl.slice(0, -6) // '/api/a' 제거 (6글자)
     }
+    
     // /api가 포함되어 있으면 제거
     if (apiUrl.endsWith('/api')) {
-      apiUrl = apiUrl.slice(0, -4)
+      apiUrl = apiUrl.slice(0, -4) // '/api' 제거 (4글자)
     }
-    // /api/a 추가
-    return `${apiUrl}/api/a`
+    
+    // 최종적으로 /api/a 추가 (항상 새로 추가)
+    const finalUrl = `${apiUrl}/api/a`
+    console.log('🔧 A Backend URL 구성:', {
+      original: import.meta.env.VITE_API_URL,
+      afterCleanup: apiUrl,
+      final: finalUrl
+    })
+    return finalUrl
   }
   
   // 개발 환경: localhost가 아니면 같은 IP의 3030 포트 사용 (B Backend)
@@ -33,11 +42,9 @@ const getABackendApiUrl = () => {
 
 const API_A_URL = getABackendApiUrl()
 
-// 디버깅: API URL 로그 출력 (프로덕션에서는 제거 가능)
-if (import.meta.env.DEV) {
-  console.log('🔧 A Backend API URL:', API_A_URL)
-  console.log('🔧 VITE_API_URL:', import.meta.env.VITE_API_URL)
-}
+// 디버깅: API URL 로그 출력 (프로덕션에서도 출력하여 문제 진단)
+console.log('🔧 A Backend API URL:', API_A_URL)
+console.log('🔧 VITE_API_URL (원본):', import.meta.env.VITE_API_URL)
 
 export const apiA = axios.create({
   baseURL: API_A_URL,
