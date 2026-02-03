@@ -19,7 +19,8 @@ import {
   SearchOutlined, 
   PlusOutlined, 
   EditOutlined, 
-  DeleteOutlined 
+  DeleteOutlined,
+  MailOutlined
 } from '@ant-design/icons'
 import { api } from '../../utils/api'
 import type { ColumnsType } from 'antd/es/table'
@@ -118,6 +119,19 @@ export function InterviewerManagePage() {
     },
   })
 
+  const testEmailMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.post(`/interviewers/${id}/test-email`)
+      return response.data
+    },
+    onSuccess: (data) => {
+      message.success(data.message || '테스트 메일이 발송되었습니다')
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || '테스트 메일 발송에 실패했습니다')
+    },
+  })
+
   const handleUpload = (file: File) => {
     uploadMutation.mutate(file)
     return false // Prevent default upload
@@ -145,6 +159,10 @@ export function InterviewerManagePage() {
 
   const handleDelete = (id: string) => {
     deleteMutation.mutate(id)
+  }
+
+  const handleTestEmail = (id: string) => {
+    testEmailMutation.mutate(id)
   }
 
   const handleSubmit = () => {
@@ -227,6 +245,14 @@ export function InterviewerManagePage() {
             onClick={() => handleEdit(record)}
           >
             수정
+          </Button>
+          <Button
+            type="link"
+            icon={<MailOutlined />}
+            onClick={() => handleTestEmail(record.interviewer_id)}
+            loading={testEmailMutation.isPending}
+          >
+            테스트 메일
           </Button>
           <Popconfirm
             title="면접관 비활성화"

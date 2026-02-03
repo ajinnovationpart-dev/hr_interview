@@ -542,6 +542,47 @@ export class SharePointRestService {
     await this.saveWorkbook();
   }
 
+  async deleteInterview(interviewId: string): Promise<void> {
+    const workbook = await this.loadWorkbook();
+    try {
+      // interviews 시트에서 삭제
+      const interviewRows = await this.readWorksheet('interviews');
+      const filteredInterviewRows = interviewRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['interviews'] = XLSX.utils.aoa_to_sheet(filteredInterviewRows);
+
+      // interview_candidates 시트에서 삭제
+      const interviewCandidateRows = await this.readWorksheet('interview_candidates');
+      const filteredInterviewCandidateRows = interviewCandidateRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['interview_candidates'] = XLSX.utils.aoa_to_sheet(filteredInterviewCandidateRows);
+
+      // candidate_interviewers 시트에서 삭제
+      const candidateInterviewerRows = await this.readWorksheet('candidate_interviewers');
+      const filteredCandidateInterviewerRows = candidateInterviewerRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['candidate_interviewers'] = XLSX.utils.aoa_to_sheet(filteredCandidateInterviewerRows);
+
+      // interview_interviewers 시트에서 삭제
+      const interviewInterviewerRows = await this.readWorksheet('interview_interviewers');
+      const filteredInterviewInterviewerRows = interviewInterviewerRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['interview_interviewers'] = XLSX.utils.aoa_to_sheet(filteredInterviewInterviewerRows);
+
+      // time_selections 시트에서 삭제
+      const timeSelectionRows = await this.readWorksheet('time_selections');
+      const filteredTimeSelectionRows = timeSelectionRows.filter((row, idx) => idx === 0 || row[1] !== interviewId);
+      workbook.Sheets['time_selections'] = XLSX.utils.aoa_to_sheet(filteredTimeSelectionRows);
+
+      // confirmed_schedules 시트에서 삭제
+      const confirmedScheduleRows = await this.readWorksheet('confirmed_schedules');
+      const filteredConfirmedScheduleRows = confirmedScheduleRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['confirmed_schedules'] = XLSX.utils.aoa_to_sheet(filteredConfirmedScheduleRows);
+
+      await this.saveWorkbook();
+      logger.info(`Interview ${interviewId} and all related data deleted`);
+    } catch (error) {
+      logger.error(`Error deleting interview ${interviewId}:`, error);
+      throw error;
+    }
+  }
+
   async updateInterviewStatus(interviewId: string, status: string): Promise<void> {
     await this.updateInterview(interviewId, { 
       status: status as InterviewRow['status'],

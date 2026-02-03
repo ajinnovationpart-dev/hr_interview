@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Checkbox, Divider, Typography } from 'antd'
+import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag } from 'antd'
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
+import type { SelectProps } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { api } from '../../utils/api'
@@ -18,6 +19,72 @@ export function InterviewCreatePage() {
       return response.data.data
     },
   })
+
+  // 면접관을 부서별로 그룹화
+  const groupedInterviewers = interviewers?.reduce((acc: any, interviewer: any) => {
+    const department = interviewer.department || '기타'
+    if (!acc[department]) {
+      acc[department] = []
+    }
+    acc[department].push(interviewer)
+    return acc
+  }, {}) || {}
+
+  // 부서별 정렬된 키 목록
+  const departmentKeys = Object.keys(groupedInterviewers).sort()
+
+  // Select 옵션 생성 (부서별 OptGroup 사용)
+  const interviewerOptions: SelectProps['options'] = departmentKeys.map((department) => {
+    const deptInterviewers = groupedInterviewers[department]
+    return {
+      label: department,
+      options: deptInterviewers.map((interviewer: any) => ({
+        label: (
+          <Space>
+            <span style={{ fontWeight: interviewer.is_team_lead ? 600 : 400 }}>
+              {interviewer.name}
+            </span>
+            {interviewer.position && (
+              <Tag color="default" style={{ margin: 0 }}>{interviewer.position}</Tag>
+            )}
+            {interviewer.is_team_lead && (
+              <Tag color="red" style={{ margin: 0 }}>⭐팀장급</Tag>
+            )}
+          </Space>
+        ),
+        value: interviewer.interviewer_id,
+        interviewer: interviewer,
+      })),
+    }
+  })
+
+  // 검색 필터 함수
+  const filterOption = (input: string, option: any) => {
+    // OptGroup의 경우 options 배열을 확인
+    if (option.options) {
+      return option.options.some((opt: any) => {
+        const interviewer = opt.interviewer
+        const searchText = input.toLowerCase()
+        return (
+          interviewer.name.toLowerCase().includes(searchText) ||
+          interviewer.department?.toLowerCase().includes(searchText) ||
+          interviewer.position?.toLowerCase().includes(searchText) ||
+          interviewer.email?.toLowerCase().includes(searchText)
+        )
+      })
+    }
+    
+    // 개별 옵션의 경우
+    const interviewer = option.interviewer
+    if (!interviewer) return false
+    const searchText = input.toLowerCase()
+    return (
+      interviewer.name.toLowerCase().includes(searchText) ||
+      interviewer.department?.toLowerCase().includes(searchText) ||
+      interviewer.position?.toLowerCase().includes(searchText) ||
+      interviewer.email?.toLowerCase().includes(searchText)
+    )
+  }
 
   const { data: config } = useQuery({
     queryKey: ['config'],
@@ -276,18 +343,30 @@ export function InterviewCreatePage() {
                       }
                     ]}
                   >
-                    <Checkbox.Group style={{ width: '100%' }}>
-                      <Space direction="vertical" style={{ width: '100%' }}>
-                        {interviewers?.map((interviewer: any) => (
-                          <Checkbox key={interviewer.interviewer_id} value={interviewer.interviewer_id}>
-                            {interviewer.name} ({interviewer.department} - {interviewer.position})
-                            {interviewer.is_team_lead && (
-                              <Text type="danger" style={{ marginLeft: '8px' }}>⭐팀장급</Text>
-                            )}
-                          </Checkbox>
-                        ))}
-                      </Space>
-                    </Checkbox.Group>
+                    <Select
+                      mode="multiple"
+                      placeholder="면접관을 검색하여 선택하세요 (이름, 부서, 직책으로 검색 가능)"
+                      options={interviewerOptions}
+                      filterOption={filterOption}
+                      showSearch
+                      allowClear
+                      style={{ width: '100%' }}
+                      maxTagCount="responsive"
+                      tagRender={(props) => {
+                        const { label, value, closable, onClose } = props
+                        const interviewer = interviewers?.find((iv: any) => iv.interviewer_id === value)
+                        return (
+                          <Tag
+                            color={interviewer?.is_team_lead ? 'red' : 'blue'}
+                            closable={closable}
+                            onClose={onClose}
+                            style={{ marginRight: 3 }}
+                          >
+                            {interviewer?.name} {interviewer?.is_team_lead && '⭐'}
+                          </Tag>
+                        )
+                      }}
+                    />
                   </Form.Item>
 
                   <Text type="secondary" style={{ fontSize: '12px' }}>

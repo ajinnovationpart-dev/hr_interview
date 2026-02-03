@@ -15,16 +15,16 @@ $configFile = "ngrok-config.yml"
 
 # Config 파일 생성
 Write-Host "[1] ngrok config 파일 생성" -ForegroundColor Yellow
-$configContent = @"
-version: "2"
-tunnels:
-  tunnel-$Port1:
-    addr: $Port1
-    proto: http
-  tunnel-$Port2:
-    addr: $Port2
-    proto: http
-"@
+$tunnel1Name = "tunnel-$Port1"
+$tunnel2Name = "tunnel-$Port2"
+$configContent = "version: `"2`"`n"
+$configContent += "tunnels:`n"
+$configContent += "  ${tunnel1Name}:`n"
+$configContent += "    addr: $Port1`n"
+$configContent += "    proto: http`n"
+$configContent += "  ${tunnel2Name}:`n"
+$configContent += "    addr: $Port2`n"
+$configContent += "    proto: http`n"
 
 $configContent | Out-File -FilePath $configFile -Encoding UTF8
 Write-Host "   ✅ Config 파일 생성: $configFile" -ForegroundColor Green
@@ -53,7 +53,7 @@ if ($existingNgrok) {
         Write-Host ""
     } else {
         Write-Host "   ℹ️  기존 ngrok은 그대로 두고, 새 터미널에서 다음 명령어를 실행하세요:" -ForegroundColor Cyan
-        Write-Host "      ngrok start --config $configFile --all" -ForegroundColor White
+        Write-Host "      ngrok start --config ngrok-config.yml --all" -ForegroundColor White
         Write-Host ""
         exit 0
     }
@@ -83,7 +83,7 @@ Write-Host ""
 
 # ngrok 시작
 Write-Host "[4] ngrok 시작" -ForegroundColor Yellow
-Write-Host "   명령어: ngrok start --config $configFile --all" -ForegroundColor Gray
+Write-Host "   명령어: ngrok start --config ngrok-config.yml --all" -ForegroundColor Gray
 Write-Host ""
 Write-Host "   다음 단계:" -ForegroundColor Cyan
 Write-Host "      1. 위 명령어를 새 터미널에서 실행하세요" -ForegroundColor White
@@ -101,7 +101,7 @@ if ($autoStart -eq "Y" -or $autoStart -eq "y") {
     Write-Host "   터널 정보 확인: http://127.0.0.1:4040/api/tunnels" -ForegroundColor Cyan
 } else {
     Write-Host "   수동으로 다음 명령어를 실행하세요:" -ForegroundColor Yellow
-    Write-Host "      ngrok start --config $configFile --all" -ForegroundColor White
+    Write-Host "      ngrok start --config ngrok-config.yml --all" -ForegroundColor White
 }
 
 Write-Host ""

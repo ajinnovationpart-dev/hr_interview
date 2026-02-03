@@ -144,6 +144,12 @@ export function ConfirmPage() {
               loading={mutation.isPending}
               block
               size="large"
+              style={{ 
+                minHeight: '48px',
+                fontSize: '16px',
+                fontWeight: 600,
+                marginTop: '16px'
+              }}
             >
               일정 제출
             </Button>

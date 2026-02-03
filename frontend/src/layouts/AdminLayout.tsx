@@ -5,6 +5,12 @@ import {
   PlusOutlined,
   UserOutlined,
   LogoutOutlined,
+  SettingOutlined,
+  HomeOutlined,
+  BarChartOutlined,
+  TeamOutlined,
+  CalendarOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../stores/authStore'
 
@@ -30,6 +36,36 @@ export function AdminLayout() {
       key: '/admin/interviewers',
       icon: <UserOutlined />,
       label: '면접관 관리',
+    },
+    {
+      key: '/admin/rooms',
+      icon: <HomeOutlined />,
+      label: '면접실 관리',
+    },
+    {
+      key: '/admin/candidates',
+      icon: <TeamOutlined />,
+      label: '지원자 관리',
+    },
+    {
+      key: '/admin/statistics',
+      icon: <BarChartOutlined />,
+      label: '통계 및 리포트',
+    },
+    {
+      key: '/admin/interviewer-schedule',
+      icon: <ScheduleOutlined />,
+      label: '면접관 스케줄',
+    },
+    {
+      key: '/admin/calendar',
+      icon: <CalendarOutlined />,
+      label: '캘린더 뷰',
+    },
+    {
+      key: '/admin/settings',
+      icon: <SettingOutlined />,
+      label: '설정',
     },
   ]
 

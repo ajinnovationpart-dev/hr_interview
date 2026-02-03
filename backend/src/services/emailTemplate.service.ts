@@ -224,34 +224,35 @@ export class EmailTemplateService {
 
       <p>가능하신 일정을 선택해 주시기 바랍니다. 제안된 날짜 외에도 다른 날짜와 시간을 선택하실 수 있습니다.</p>
 
-      <!-- Outlook용 버튼 (VML + 테이블 하이브리드) -->
-      <!--[if mso]>
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 40px 0;">
-        <tr>
-          <td align="center" style="padding: 20px 0;">
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-              <tr>
-                <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px;">
-                  <a href="${data.confirmLink}" style="color: #ffffff; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; display: inline-block;">일정 선택하기</a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-      <![endif]-->
-      <!-- 일반 이메일 클라이언트용 버튼 -->
-      <!--[if !mso]><!-->
+      <!-- PC/모바일 모두 지원하는 버튼 (하이브리드 방식) -->
       <div style="text-align: center; margin: 40px 0; padding: 30px 0;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto; border-collapse: separate; border-spacing: 0;">
+        <!-- Outlook용 (MSO 조건부) -->
+        <!--[if mso]>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0;">
           <tr>
-            <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px; mso-padding-alt: 18px 40px;">
-              <a href="${data.confirmLink}" target="_blank" style="color: #ffffff; font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; display: inline-block; line-height: 1.5; mso-line-height-rule: exactly;">일정 선택하기</a>
+            <td align="center" style="padding: 20px 0;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px;">
+                    <a href="${data.confirmLink}" style="color: #ffffff; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; display: inline-block; line-height: 1.5;">일정 선택하기</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
+        <![endif]-->
+        <!-- 일반 이메일 클라이언트용 (Gmail, Apple Mail, 기타) -->
+        <!--[if !mso]><!-->
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto; border-collapse: separate; border-spacing: 0; min-width: 200px;">
+          <tr>
+            <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px; mso-padding-alt: 18px 40px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+              <a href="${data.confirmLink}" target="_blank" style="color: #ffffff !important; font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', Arial, sans-serif; font-size: 16px; font-weight: 600; text-decoration: none !important; display: inline-block; line-height: 1.5; mso-line-height-rule: exactly; min-width: 160px; text-align: center;">일정 선택하기</a>
+            </td>
+          </tr>
+        </table>
+        <!--<![endif]-->
       </div>
-      <!--<![endif]-->
 
       <p style="color: #6b7280; font-size: 13px; margin-top: 24px; text-align: center; line-height: 1.6;">
         48시간 이내에 응답해 주시면 감사하겠습니다.<br>
@@ -502,34 +503,35 @@ export class EmailTemplateService {
       
       ${urgencyLevel === 'HIGH' ? '<p style="color: #dc2626; font-weight: 600;">최종 요청입니다. 빠른 시일 내에 응답 부탁드립니다.</p>' : '<p>가능하신 일정을 선택해 주시기 바랍니다.</p>'}
       
-      <!-- Outlook용 버튼 (테이블 기반) -->
-      <!--[if mso]>
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 40px 0;">
-        <tr>
-          <td align="center" style="padding: 20px 0;">
-            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-              <tr>
-                <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px;">
-                  <a href="${data.confirmLink}" style="color: #ffffff; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; display: inline-block;">일정 선택하기</a>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-      <![endif]-->
-      <!-- 일반 이메일 클라이언트용 버튼 -->
-      <!--[if !mso]><!-->
+      <!-- PC/모바일 모두 지원하는 버튼 (하이브리드 방식) -->
       <div style="text-align: center; margin: 40px 0; padding: 30px 0;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto; border-collapse: separate; border-spacing: 0;">
+        <!-- Outlook용 (MSO 조건부) -->
+        <!--[if mso]>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0;">
           <tr>
-            <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px; mso-padding-alt: 18px 40px;">
-              <a href="${data.confirmLink}" target="_blank" style="color: #ffffff; font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; display: inline-block; line-height: 1.5; mso-line-height-rule: exactly;">일정 선택하기</a>
+            <td align="center" style="padding: 20px 0;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px;">
+                    <a href="${data.confirmLink}" style="color: #ffffff; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; font-size: 16px; font-weight: 600; text-decoration: none; display: inline-block; line-height: 1.5;">일정 선택하기</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
+        <![endif]-->
+        <!-- 일반 이메일 클라이언트용 (Gmail, Apple Mail, 기타) -->
+        <!--[if !mso]><!-->
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto; border-collapse: separate; border-spacing: 0; min-width: 200px;">
+          <tr>
+            <td align="center" bgcolor="#2563eb" style="background-color: #2563eb; border-radius: 8px; padding: 18px 40px; mso-padding-alt: 18px 40px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
+              <a href="${data.confirmLink}" target="_blank" style="color: #ffffff !important; font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', Arial, sans-serif; font-size: 16px; font-weight: 600; text-decoration: none !important; display: inline-block; line-height: 1.5; mso-line-height-rule: exactly; min-width: 160px; text-align: center;">일정 선택하기</a>
+            </td>
+          </tr>
+        </table>
+        <!--<![endif]-->
       </div>
-      <!--<![endif]-->
     </div>
 
     <div class="footer">

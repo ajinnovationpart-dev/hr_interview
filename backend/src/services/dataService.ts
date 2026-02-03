@@ -15,12 +15,17 @@ export interface IDataService {
   getAllInterviews(): Promise<any[]>;
   getInterviewById(interviewId: string): Promise<any | null>;
   createInterview(interview: any): Promise<void>;
+  updateInterview(interviewId: string, updates: any): Promise<void>;
   updateInterviewStatus(interviewId: string, status: string): Promise<void>;
+  deleteInterview(interviewId: string): Promise<void>;
 
   // Candidates
   getAllCandidates(): Promise<any[]>;
+  getCandidateById(candidateId: string): Promise<any | null>;
   getCandidatesByInterview(interviewId: string): Promise<any[]>;
   createCandidate(candidate: any): Promise<void>;
+  updateCandidate(candidateId: string, updates: any): Promise<void>;
+  updateCandidateStatus(candidateId: string, status: string): Promise<void>;
 
   // Interview-Candidate Mapping
   createInterviewCandidate(mapping: any): Promise<void>;
@@ -39,6 +44,7 @@ export interface IDataService {
   // Interview-Interviewer Mapping
   getInterviewInterviewers(interviewId: string): Promise<any[]>;
   createInterviewInterviewers(mappings: any[]): Promise<void>;
+  updateInterviewInterviewers(interviewId: string, interviewerIds: string[]): Promise<void>;
   updateRespondedAt(interviewId: string, interviewerId: string): Promise<void>;
   updateReminderSent(interviewId: string, interviewerId: string): Promise<void>;
 
@@ -50,6 +56,18 @@ export interface IDataService {
   getConfirmedSchedule(interviewId: string): Promise<any | null>;
   getConfirmedSchedulesByCandidate(interviewId: string, candidateId: string): Promise<any | null>;
   createConfirmedSchedule(schedule: any): Promise<void>;
+
+  // Rooms
+  getAllRooms(): Promise<any[]>;
+  getRoomById(roomId: string): Promise<any | null>;
+  createRoom(room: any): Promise<void>;
+  updateRoom(roomId: string, updates: any): Promise<void>;
+  deleteRoom(roomId: string): Promise<void>;
+  getRoomAvailability(roomId: string, date: string): Promise<any[]>;
+
+  // Interview History
+  createInterviewHistory(history: any): Promise<void>;
+  getInterviewHistory(interviewId: string): Promise<any[]>;
 
   // Config
   getConfig(): Promise<Record<string, string>>;

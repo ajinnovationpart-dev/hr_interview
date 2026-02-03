@@ -157,6 +157,11 @@ export class GoogleSheetsService {
     if (!result.success) throw new Error(result.message);
   }
 
+  async deleteInterview(interviewId: string): Promise<void> {
+    const result = await this.callAPI('deleteInterview', { interviewId }, 'POST');
+    if (!result.success) throw new Error(result.message);
+  }
+
   // ========== Candidates ==========
 
   async getAllCandidates(): Promise<CandidateRow[]> {

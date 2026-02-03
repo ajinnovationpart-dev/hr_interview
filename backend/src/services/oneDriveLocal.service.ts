@@ -35,6 +35,16 @@ export class OneDriveLocalService {
     this.lockFilePath = this.filePath + '.lock';
 
     logger.info(`OneDrive Local Service initialized with path: ${this.filePath}`);
+    
+    // 초기화 시 필요한 시트 생성 (비동기로 실행, 에러는 로그만 남기고 계속 진행)
+    this.initializeSheets().catch(error => {
+      logger.error('Error initializing sheets:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      // 시트 초기화 실패해도 서비스는 계속 사용 가능 (시트는 필요할 때 생성됨)
+      logger.warn('Continuing without sheet initialization. Sheets will be created on first use.');
+    });
   }
 
   /**
@@ -43,6 +53,50 @@ export class OneDriveLocalService {
   private async acquireLock(): Promise<void> {
     const maxRetries = 30; // 재시도 횟수 증가 (10 -> 30)
     const retryDelay = 200; // 대기 시간 증가 (100ms -> 200ms)
+
+    // 먼저 잠금 파일이 존재하는지 확인하고, 오래된 잠금 파일이면 삭제
+    try {
+      const lockExists = await fs.access(this.lockFilePath).then(() => true).catch(() => false);
+      if (lockExists) {
+        try {
+          const lockContent = await fs.readFile(this.lockFilePath, 'utf-8');
+          const lockPid = parseInt(lockContent.trim());
+          
+          // PID가 유효한지 확인 (0이면 시스템 프로세스이므로 건너뛰기)
+          if (lockPid > 0) {
+            // Windows에서 프로세스가 살아있는지 확인
+            try {
+              // 프로세스가 존재하는지 확인 (간단한 방법)
+              process.kill(lockPid, 0); // 시그널 0은 프로세스 존재 여부만 확인
+              // 프로세스가 살아있으면 잠시 대기
+              logger.debug(`Lock file exists, process ${lockPid} is running, waiting...`);
+            } catch {
+              // 프로세스가 없으면 오래된 잠금 파일로 간주하고 삭제
+              logger.warn(`Removing stale lock file (PID: ${lockPid} - process not found)`);
+              await fs.unlink(this.lockFilePath);
+            }
+          } else {
+            // PID가 0이거나 유효하지 않으면 삭제
+            logger.warn(`Removing invalid lock file (PID: ${lockPid})`);
+            await fs.unlink(this.lockFilePath);
+          }
+        } catch (err: any) {
+          // 잠금 파일 읽기 실패 시 삭제 시도
+          if (err.code === 'ENOENT') {
+            // 파일이 이미 없음
+          } else {
+            logger.warn(`Error reading lock file, removing it: ${err.message}`);
+            try {
+              await fs.unlink(this.lockFilePath);
+            } catch {
+              // 삭제 실패는 무시
+            }
+          }
+        }
+      }
+    } catch {
+      // 접근 확인 실패는 무시 (파일이 없을 수 있음)
+    }
 
     for (let i = 0; i < maxRetries; i++) {
       try {
@@ -63,26 +117,16 @@ export class OneDriveLocalService {
       }
     }
 
-    // 마지막 시도에서도 실패하면 잠금 파일이 오래된 것인지 확인
+    // 마지막 시도에서도 실패하면 잠금 파일을 강제로 삭제하고 재시도
     try {
-      const lockContent = await fs.readFile(this.lockFilePath, 'utf-8');
-      const lockPid = parseInt(lockContent.trim());
-      
-      // 프로세스가 살아있는지 확인 (Windows)
-      try {
-        // Windows에서 프로세스 확인은 복잡하므로, 일단 잠금 파일을 삭제하고 재시도
-        logger.warn(`Removing stale lock file (PID: ${lockPid})`);
-        await fs.unlink(this.lockFilePath);
-        
-        // 한 번 더 시도
-        await fs.writeFile(this.lockFilePath, process.pid.toString(), { flag: 'wx' });
-        logger.debug('File lock acquired after removing stale lock');
-        return;
-      } catch {
-        // 프로세스가 살아있을 수 있으므로 에러 발생
-      }
+      logger.warn('Removing lock file after maximum retries');
+      await fs.unlink(this.lockFilePath);
+      // 한 번 더 시도
+      await fs.writeFile(this.lockFilePath, process.pid.toString(), { flag: 'wx' });
+      logger.debug('File lock acquired after removing lock file');
+      return;
     } catch {
-      // 잠금 파일 읽기 실패
+      // 최종 실패
     }
 
     throw new Error('Failed to acquire file lock after maximum retries. The file may be locked by Excel or OneDrive sync.');
@@ -129,11 +173,22 @@ export class OneDriveLocalService {
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         // 파일이 없으면 새 워크북 생성
-        logger.warn('Excel file not found, creating new workbook');
+        logger.warn(`Excel file not found at ${this.filePath}, creating new workbook`);
         this.workbook = XLSX.utils.book_new();
+        // 필요한 시트 초기화 (비동기로 실행, 에러는 로그만 남기고 계속 진행)
+        this.initializeSheets().catch(err => {
+          logger.warn('Error initializing sheets during load:', {
+            message: err instanceof Error ? err.message : String(err),
+          });
+        });
         return this.workbook;
       }
-      logger.error('Error loading Excel file:', error);
+      logger.error('Error loading Excel file:', {
+        message: error.message,
+        code: error.code,
+        path: this.filePath,
+        stack: error.stack,
+      });
       throw new Error(`Failed to load Excel file: ${error.message}`);
     }
   }
@@ -212,20 +267,172 @@ export class OneDriveLocalService {
   }
 
   /**
+   * 필요한 시트가 없으면 생성
+   */
+  private async ensureSheet(sheetName: string, headers: string[]): Promise<void> {
+    try {
+      const workbook = await this.loadWorkbook();
+      
+      if (!workbook.Sheets[sheetName]) {
+        logger.info(`Creating missing sheet: ${sheetName}`);
+        const headerRow = [headers];
+        workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(headerRow);
+        if (!workbook.SheetNames.includes(sheetName)) {
+          workbook.SheetNames.push(sheetName);
+        }
+        await this.saveWorkbook(true);
+        logger.info(`✅ Sheet '${sheetName}' created successfully`);
+      } else {
+        // 시트는 있지만 헤더가 없는 경우 확인
+        const worksheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+        if (rows.length === 0 || (rows.length === 1 && JSON.stringify(rows[0]) !== JSON.stringify(headers))) {
+          // 헤더가 없거나 다른 헤더인 경우 업데이트
+          logger.info(`Updating headers for sheet: ${sheetName}`);
+          const headerRow = [headers];
+          workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(headerRow);
+          await this.saveWorkbook(true);
+          logger.info(`✅ Sheet '${sheetName}' headers updated successfully`);
+        }
+      }
+    } catch (error: any) {
+      logger.error(`Error ensuring sheet '${sheetName}':`, {
+        message: error.message,
+        code: error.code,
+      });
+      // 시트 생성 실패해도 에러를 던져서 상위에서 처리하도록 함
+      throw error;
+    }
+  }
+
+  /**
+   * 모든 필요한 시트 초기화
+   */
+  private async initializeSheets(): Promise<void> {
+    const requiredSheets = [
+      {
+        name: 'interviews',
+        headers: ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason']
+      },
+      {
+        name: 'candidates',
+        headers: ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes']
+      },
+      {
+        name: 'interview_candidates',
+        headers: ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at']
+      },
+      {
+        name: 'candidate_interviewers',
+        headers: ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at']
+      },
+      {
+        name: 'interviewers',
+        headers: ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at']
+      },
+      {
+        name: 'interview_interviewers',
+        headers: ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at']
+      },
+      {
+        name: 'time_selections',
+        headers: ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at']
+      },
+      {
+        name: 'confirmed_schedules',
+        headers: ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at']
+      },
+      {
+        name: 'config',
+        headers: ['config_key', 'config_value', 'description', 'updated_at']
+      },
+      {
+        name: 'rooms',
+        headers: ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at']
+      },
+      {
+        name: 'interview_history',
+        headers: ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason']
+      },
+    ];
+
+    logger.info(`Initializing ${requiredSheets.length} required sheets...`);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const sheet of requiredSheets) {
+      try {
+        await this.ensureSheet(sheet.name, sheet.headers);
+        successCount++;
+      } catch (error: any) {
+        failCount++;
+        logger.error(`Failed to initialize sheet '${sheet.name}':`, {
+          message: error.message,
+          code: error.code,
+        });
+        // 하나의 시트 실패해도 다른 시트는 계속 생성 시도
+      }
+    }
+
+    logger.info(`Sheet initialization complete: ${successCount} succeeded, ${failCount} failed`);
+    if (failCount > 0) {
+      logger.warn(`Some sheets failed to initialize. They will be created on first use.`);
+    }
+  }
+
+  /**
    * 워크시트 읽기
    */
   private async readWorksheet(sheetName: string): Promise<any[][]> {
-    const workbook = await this.loadWorkbook();
-    const worksheet = workbook.Sheets[sheetName];
-    
-    if (!worksheet) {
-      logger.warn(`Worksheet ${sheetName} not found, returning empty array`);
+    try {
+      const workbook = await this.loadWorkbook();
+      const worksheet = workbook.Sheets[sheetName];
+      
+      if (!worksheet) {
+        logger.warn(`Worksheet ${sheetName} not found, creating it...`);
+        // 시트가 없으면 생성 시도
+        const sheetConfigs: Record<string, string[]> = {
+          'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
+          'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
+          'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+          'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
+          'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'],
+          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+          'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+          'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
+          'config': ['config_key', 'config_value', 'description', 'updated_at'],
+          'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
+          'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+        };
+        
+        if (sheetConfigs[sheetName]) {
+          await this.ensureSheet(sheetName, sheetConfigs[sheetName]);
+          // 다시 읽기
+          const reloadedWorkbook = await this.loadWorkbook();
+          const newWorksheet = reloadedWorkbook.Sheets[sheetName];
+          if (newWorksheet) {
+            const rows = XLSX.utils.sheet_to_json(newWorksheet, { header: 1, defval: '' }) as any[][];
+            logger.info(`✅ Successfully created and read sheet: ${sheetName}, rows: ${rows.length}`);
+            return rows;
+          }
+        }
+        logger.warn(`Sheet ${sheetName} could not be created, returning empty array`);
+        return [];
+      }
+
+      // Excel 데이터를 2D 배열로 변환
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+      logger.debug(`Read sheet ${sheetName}: ${rows.length} rows`);
+      return rows;
+    } catch (error: any) {
+      logger.error(`Error reading worksheet ${sheetName}:`, {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
+      // 에러가 발생해도 빈 배열 반환 (시스템이 계속 작동하도록)
       return [];
     }
-
-    // Excel 데이터를 2D 배열로 변환
-    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
-    return rows;
   }
 
   /**
@@ -234,9 +441,25 @@ export class OneDriveLocalService {
   private async appendRow(sheetName: string, row: any[]): Promise<void> {
     const workbook = await this.loadWorkbook();
     
-    // 워크시트가 없으면 생성
+    // 워크시트가 없으면 헤더 포함해서 생성
     if (!workbook.Sheets[sheetName]) {
-      workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet([]);
+      const sheetConfigs: Record<string, string[]> = {
+        'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
+        'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
+        'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+        'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
+        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'],
+        'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+        'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+        'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
+        'config': ['config_key', 'config_value', 'description', 'updated_at'],
+        'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
+        'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+      };
+      
+      const headers = sheetConfigs[sheetName] || [];
+      const headerRow = headers.length > 0 ? [headers] : [];
+      workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(headerRow);
       if (!workbook.SheetNames.includes(sheetName)) {
         workbook.SheetNames.push(sheetName);
       }
@@ -244,6 +467,29 @@ export class OneDriveLocalService {
 
     const worksheet = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+    
+    // 헤더만 있고 데이터가 없는 경우 확인
+    if (rows.length === 1 && rows[0].every((cell: any) => !cell || cell === '')) {
+      // 헤더 행이 비어있으면 다시 설정
+      const sheetConfigs: Record<string, string[]> = {
+        'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
+        'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
+        'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+        'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
+        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'],
+        'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+        'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+        'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
+        'config': ['config_key', 'config_value', 'description', 'updated_at'],
+        'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
+        'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+      };
+      const headers = sheetConfigs[sheetName] || [];
+      if (headers.length > 0) {
+        rows[0] = headers;
+      }
+    }
+    
     rows.push(row);
     
     workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(rows);
@@ -281,21 +527,61 @@ export class OneDriveLocalService {
   // ========== Public Methods (dataService 인터페이스 구현) ==========
 
   async getAllInterviews(): Promise<InterviewRow[]> {
-    const rows = await this.readWorksheet('interviews');
-    if (rows.length < 2) return [];
-    
-    return rows.slice(1).map(row => ({
-      interview_id: row[0] || '',
-      main_notice: row[1] || '',
-      team_name: row[2] || '',
-      proposed_date: row[3] || '',
-      proposed_start_time: row[4] || '',
-      proposed_end_time: row[5] || '',
-      status: (row[6] || 'PENDING') as InterviewRow['status'],
-      created_by: row[7] || '',
-      created_at: row[8] || '',
-      updated_at: row[9] || '',
-    }));
+    try {
+      // 시트가 없으면 먼저 생성
+      try {
+        await this.ensureSheet('interviews', [
+          'interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 
+          'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 
+          'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'
+        ]);
+      } catch (err) {
+        logger.warn('Error ensuring interviews sheet:', err);
+      }
+      
+      const rows = await this.readWorksheet('interviews');
+      if (rows.length < 2) {
+        logger.info('No interview data found (only headers or empty sheet)');
+        return [];
+      }
+      
+      const interviews = rows.slice(1).map((row, index) => {
+        try {
+          return {
+            interview_id: row[0] || '',
+            main_notice: row[1] || '',
+            team_name: row[2] || '',
+            proposed_date: row[3] || '',
+            proposed_start_time: row[4] || '',
+            proposed_end_time: row[5] || '',
+            status: (row[6] || 'PENDING') as InterviewRow['status'],
+            created_by: row[7] || '',
+            created_at: row[8] || '',
+            updated_at: row[9] || '',
+            room_id: row[10] || '',
+            cancellation_reason: row[11] || '',
+            completed_at: row[12] || '',
+            interview_notes: row[13] || '',
+            no_show_type: row[14] || '',
+            no_show_reason: row[15] || '',
+          };
+        } catch (err) {
+          logger.warn(`Error parsing interview row ${index + 2}:`, err);
+          return null;
+        }
+      }).filter((item): item is InterviewRow => item !== null);
+      
+      logger.info(`Successfully loaded ${interviews.length} interviews from Excel`);
+      return interviews;
+    } catch (error: any) {
+      logger.error('Error in getAllInterviews:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
+      // 에러가 발생해도 빈 배열 반환
+      return [];
+    }
   }
 
   async getInterviewById(id: string): Promise<InterviewRow | null> {
@@ -318,7 +604,7 @@ export class OneDriveLocalService {
     ]);
   }
 
-  async updateInterviewStatus(interviewId: string, status: string): Promise<void> {
+  async updateInterview(interviewId: string, updates: any): Promise<void> {
     const rows = await this.readWorksheet('interviews');
     const index = rows.findIndex((row, idx) => idx > 0 && row[0] === interviewId);
     
@@ -329,16 +615,79 @@ export class OneDriveLocalService {
     const workbook = await this.loadWorkbook();
     await this.acquireLock();
     try {
-      rows[index][6] = status; // status
-      rows[index][9] = new Date().toISOString(); // updated_at
+      const row = rows[index];
+      if (updates.main_notice !== undefined) row[1] = updates.main_notice;
+      if (updates.team_name !== undefined) row[2] = updates.team_name;
+      if (updates.proposed_date !== undefined) row[3] = updates.proposed_date;
+      if (updates.proposed_start_time !== undefined) row[4] = updates.proposed_start_time;
+      if (updates.proposed_end_time !== undefined) row[5] = updates.proposed_end_time;
+      if (updates.status !== undefined) row[6] = updates.status;
+      if (updates.room_id !== undefined) row[10] = updates.room_id; // room_id 추가
+      if (updates.cancellation_reason !== undefined) row[11] = updates.cancellation_reason;
+      if (updates.completed_at !== undefined) row[12] = updates.completed_at;
+      if (updates.interview_notes !== undefined) row[13] = updates.interview_notes;
+      if (updates.no_show_type !== undefined) row[14] = updates.no_show_type;
+      if (updates.no_show_reason !== undefined) row[15] = updates.no_show_reason;
+      row[9] = new Date().toISOString(); // updated_at
       workbook.Sheets['interviews'] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
+  async updateInterviewStatus(interviewId: string, status: string): Promise<void> {
+    await this.updateInterview(interviewId, { status });
+  }
+
+  async deleteInterview(interviewId: string): Promise<void> {
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      // interviews 시트에서 삭제
+      const interviewRows = await this.readWorksheet('interviews');
+      const filteredInterviewRows = interviewRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['interviews'] = XLSX.utils.aoa_to_sheet(filteredInterviewRows);
+
+      // interview_candidates 시트에서 삭제
+      const interviewCandidateRows = await this.readWorksheet('interview_candidates');
+      const filteredInterviewCandidateRows = interviewCandidateRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['interview_candidates'] = XLSX.utils.aoa_to_sheet(filteredInterviewCandidateRows);
+
+      // candidate_interviewers 시트에서 삭제
+      const candidateInterviewerRows = await this.readWorksheet('candidate_interviewers');
+      const filteredCandidateInterviewerRows = candidateInterviewerRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['candidate_interviewers'] = XLSX.utils.aoa_to_sheet(filteredCandidateInterviewerRows);
+
+      // interview_interviewers 시트에서 삭제
+      const interviewInterviewerRows = await this.readWorksheet('interview_interviewers');
+      const filteredInterviewInterviewerRows = interviewInterviewerRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['interview_interviewers'] = XLSX.utils.aoa_to_sheet(filteredInterviewInterviewerRows);
+
+      // time_selections 시트에서 삭제
+      const timeSelectionRows = await this.readWorksheet('time_selections');
+      const filteredTimeSelectionRows = timeSelectionRows.filter((row, idx) => idx === 0 || row[1] !== interviewId);
+      workbook.Sheets['time_selections'] = XLSX.utils.aoa_to_sheet(filteredTimeSelectionRows);
+
+      // confirmed_schedules 시트에서 삭제
+      const confirmedScheduleRows = await this.readWorksheet('confirmed_schedules');
+      const filteredConfirmedScheduleRows = confirmedScheduleRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+      workbook.Sheets['confirmed_schedules'] = XLSX.utils.aoa_to_sheet(filteredConfirmedScheduleRows);
+
       await this.saveWorkbook(true); // 이미 잠금을 획득했으므로 skipLock=true
+      logger.info(`Interview ${interviewId} and all related data deleted`);
     } finally {
       await this.releaseLock();
     }
   }
 
   async getAllCandidates(): Promise<CandidateRow[]> {
+    // 시트가 없으면 먼저 생성
+    await this.ensureSheet('candidates', [
+      'candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'
+    ]).catch(err => {
+      logger.warn('Error ensuring candidates sheet:', err);
+    });
     const rows = await this.readWorksheet('candidates');
     if (rows.length < 2) return [];
     
@@ -352,11 +701,46 @@ export class OneDriveLocalService {
     }));
   }
 
+  async getCandidateById(candidateId: string): Promise<CandidateRow | null> {
+    const candidates = await this.getAllCandidates();
+    return candidates.find(c => c.candidate_id === candidateId) || null;
+  }
+
   async getCandidatesByInterview(interviewId: string): Promise<CandidateRow[]> {
     const interviewCandidates = await this.getInterviewCandidates(interviewId);
     const allCandidates = await this.getAllCandidates();
     const candidateIds = new Set(interviewCandidates.map(ic => ic.candidate_id));
     return allCandidates.filter(c => candidateIds.has(c.candidate_id));
+  }
+
+  async updateCandidate(candidateId: string, updates: any): Promise<void> {
+    const rows = await this.readWorksheet('candidates');
+    const index = rows.findIndex((row, idx) => idx > 0 && row[0] === candidateId);
+    
+    if (index === -1) {
+      throw new Error(`Candidate ${candidateId} not found`);
+    }
+
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      const row = rows[index];
+      if (updates.name !== undefined) row[1] = updates.name;
+      if (updates.email !== undefined) row[2] = updates.email;
+      if (updates.phone !== undefined) row[3] = updates.phone;
+      if (updates.position_applied !== undefined) row[4] = updates.position_applied;
+      if (updates.status !== undefined) row[6] = updates.status;
+      if (updates.resume_url !== undefined) row[7] = updates.resume_url;
+      if (updates.notes !== undefined) row[8] = updates.notes;
+      workbook.Sheets['candidates'] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
+  async updateCandidateStatus(candidateId: string, status: string): Promise<void> {
+    await this.updateCandidate(candidateId, { status });
   }
 
   async createCandidate(candidate: CandidateRow): Promise<void> {
@@ -423,6 +807,14 @@ export class OneDriveLocalService {
   }
 
   async getAllInterviewers(): Promise<InterviewerRow[]> {
+    // 시트가 없으면 먼저 생성
+    try {
+      await this.ensureSheet('interviewers', [
+        'interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'
+      ]);
+    } catch (err) {
+      logger.warn('Error ensuring interviewers sheet:', err);
+    }
     const rows = await this.readWorksheet('interviewers');
     if (rows.length < 2) return [];
     
@@ -565,6 +957,33 @@ export class OneDriveLocalService {
     }
   }
 
+  async updateInterviewInterviewers(interviewId: string, interviewerIds: string[]): Promise<void> {
+    // 기존 매핑 삭제
+    const rows = await this.readWorksheet('interview_interviewers');
+    const filteredRows = rows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
+    
+    // 새 매핑 추가
+    const now = new Date().toISOString();
+    for (const interviewerId of interviewerIds) {
+      filteredRows.push([
+        interviewId,
+        interviewerId,
+        '', // responded_at
+        0,  // reminder_sent_count
+        ''  // last_reminder_sent_at
+      ]);
+    }
+    
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      workbook.Sheets['interview_interviewers'] = XLSX.utils.aoa_to_sheet(filteredRows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
   async getTimeSelectionsByInterview(interviewId: string): Promise<TimeSelectionRow[]> {
     const rows = await this.readWorksheet('time_selections');
     if (rows.length < 2) return [];
@@ -675,5 +1094,180 @@ export class OneDriveLocalService {
     }
     
     return { updated, created };
+  }
+
+  // ========== Rooms ==========
+
+  async getAllRooms(): Promise<any[]> {
+    // 시트가 없으면 먼저 생성
+    try {
+      await this.ensureSheet('rooms', [
+        'room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'
+      ]);
+    } catch (err) {
+      logger.warn('Error ensuring rooms sheet:', err);
+    }
+    const rows = await this.readWorksheet('rooms');
+    if (rows.length < 2) return [];
+    
+    return rows.slice(1).map(row => ({
+      room_id: row[0] || '',
+      room_name: row[1] || '',
+      location: row[2] || '',
+      capacity: Number(row[3]) || 0,
+      facilities: row[4] ? (typeof row[4] === 'string' ? row[4].split(',').map(f => f.trim()) : []) : [],
+      status: (row[5] || 'available') as 'available' | 'maintenance' | 'reserved',
+      notes: row[6] || '',
+      created_at: row[7] || '',
+      updated_at: row[8] || '',
+    }));
+  }
+
+  async getRoomById(roomId: string): Promise<any | null> {
+    const rooms = await this.getAllRooms();
+    return rooms.find(r => r.room_id === roomId) || null;
+  }
+
+  async createRoom(room: any): Promise<void> {
+    const now = new Date().toISOString();
+    await this.appendRow('rooms', [
+      room.room_id,
+      room.room_name,
+      room.location,
+      room.capacity,
+      Array.isArray(room.facilities) ? room.facilities.join(',') : '',
+      room.status || 'available',
+      room.notes || '',
+      now,
+      now,
+    ]);
+  }
+
+  async updateRoom(roomId: string, updates: any): Promise<void> {
+    const rows = await this.readWorksheet('rooms');
+    const index = rows.findIndex((row, idx) => idx > 0 && row[0] === roomId);
+    
+    if (index === -1) {
+      throw new Error(`Room ${roomId} not found`);
+    }
+
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      const row = rows[index];
+      if (updates.room_name !== undefined) row[1] = updates.room_name;
+      if (updates.location !== undefined) row[2] = updates.location;
+      if (updates.capacity !== undefined) row[3] = updates.capacity;
+      if (updates.facilities !== undefined) row[4] = Array.isArray(updates.facilities) ? updates.facilities.join(',') : updates.facilities;
+      if (updates.status !== undefined) row[5] = updates.status;
+      if (updates.notes !== undefined) row[6] = updates.notes;
+      row[8] = new Date().toISOString(); // updated_at
+      workbook.Sheets['rooms'] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
+  async deleteRoom(roomId: string): Promise<void> {
+    // 사용 중인 면접이 있는지 확인
+    const interviews = await this.getAllInterviews();
+    const inUse = interviews.some(i => i.room_id === roomId && !['COMPLETED', 'CANCELLED'].includes(i.status));
+    
+    if (inUse) {
+      throw new Error('사용 중인 면접실은 삭제할 수 없습니다.');
+    }
+
+    const rows = await this.readWorksheet('rooms');
+    const filteredRows = rows.filter((row, idx) => idx === 0 || row[0] !== roomId);
+    
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      workbook.Sheets['rooms'] = XLSX.utils.aoa_to_sheet(filteredRows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
+  async getRoomAvailability(roomId: string, date: string): Promise<any[]> {
+    // 해당 날짜의 면접 일정 조회
+    const interviews = await this.getAllInterviews();
+    const confirmedSchedules = await this.getConfirmedSchedules(''); // 모든 확정 일정
+    
+    const dayInterviews = interviews.filter(i => {
+      if (i.proposed_date === date && i.room_id === roomId) return true;
+      const schedule = confirmedSchedules.find(s => s.interview_id === i.interview_id && s.confirmed_date === date);
+      return schedule && i.room_id === roomId;
+    });
+
+    // 30분 단위 슬롯 생성 (09:00-18:00)
+    const slots = [];
+    for (let hour = 9; hour < 18; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const startTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        const endTime = minute === 30 
+          ? `${String(hour + 1).padStart(2, '0')}:00`
+          : `${String(hour).padStart(2, '0')}:30`;
+        
+        // 점심시간 제외
+        if (startTime >= '12:00' && startTime < '13:00') continue;
+        
+        // 충돌 확인
+        const hasConflict = dayInterviews.some(i => {
+          const iStart = i.proposed_start_time || i.confirmed_start_time;
+          const iEnd = i.proposed_end_time || i.confirmed_end_time;
+          return (startTime < iEnd && endTime > iStart);
+        });
+        
+        slots.push({
+          startTime,
+          endTime,
+          available: !hasConflict,
+          bookedInterviewId: hasConflict ? dayInterviews.find(i => {
+            const iStart = i.proposed_start_time || i.confirmed_start_time;
+            const iEnd = i.proposed_end_time || i.confirmed_end_time;
+            return (startTime < iEnd && endTime > iStart);
+          })?.interview_id : undefined
+        });
+      }
+    }
+    
+    return slots;
+  }
+
+  // ========== Interview History ==========
+
+  async createInterviewHistory(history: any): Promise<void> {
+    await this.appendRow('interview_history', [
+      history.history_id,
+      history.interview_id,
+      history.change_type,
+      history.old_value,
+      history.new_value,
+      history.changed_by,
+      history.changed_at,
+      history.reason || '',
+    ]);
+  }
+
+  async getInterviewHistory(interviewId: string): Promise<any[]> {
+    const rows = await this.readWorksheet('interview_history');
+    if (rows.length < 2) return [];
+    
+    return rows.slice(1)
+      .filter(row => row[1] === interviewId)
+      .map(row => ({
+        history_id: row[0] || '',
+        interview_id: row[1] || '',
+        change_type: row[2] || '',
+        old_value: row[3] ? JSON.parse(row[3]) : null,
+        new_value: row[4] ? JSON.parse(row[4]) : null,
+        changed_by: row[5] || '',
+        changed_at: row[6] || '',
+        reason: row[7] || '',
+      }))
+      .sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime());
   }
 }

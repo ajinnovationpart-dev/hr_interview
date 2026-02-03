@@ -3,8 +3,11 @@ import { useAuthStore } from '../stores/authStore'
 
 // 네트워크 접속 시 자동으로 IP 감지
 const getApiUrl = () => {
-  // 환경 변수가 있으면 사용
-  if (import.meta.env.VITE_API_URL) {
+  // 현재 호스트 확인
+  const hostname = window.location.hostname
+  
+  // 프로덕션 환경에서 환경 변수 사용
+  if (import.meta.env.PROD && import.meta.env.VITE_API_URL) {
     let apiUrl = import.meta.env.VITE_API_URL
     // URL이 /로 끝나면 제거
     apiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl
@@ -15,13 +18,13 @@ const getApiUrl = () => {
     return apiUrl
   }
   
-  // 현재 호스트가 localhost가 아니면 같은 IP의 3000 포트 사용
-  const hostname = window.location.hostname
+  // 개발 환경: localhost가 아니면 같은 IP의 3000 포트 사용
+  // (브라우저의 Private Network Access 정책 때문에 localhost와 다른 IP 간 요청이 차단됨)
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
     return `http://${hostname}:3000/api`
   }
   
-  // 기본값
+  // localhost인 경우
   return 'http://localhost:3000/api'
 }
 
@@ -67,8 +70,13 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().clearAuth()
-      const basename = import.meta.env.BASE_URL || '/'
+      // 개발 환경에서는 항상 '/', 프로덕션에서는 BASE_URL 사용
+      const basename = import.meta.env.DEV ? '/' : (import.meta.env.BASE_URL || '/')
       window.location.href = `${basename}auth/login`
+    }
+    // 네트워크 오류 처리
+    if (!error.response && error.message === 'Network Error') {
+      console.error('❌ Network Error: 백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.')
     }
     return Promise.reject(error)
   }

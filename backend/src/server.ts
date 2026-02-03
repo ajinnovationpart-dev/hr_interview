@@ -11,6 +11,14 @@ import { interviewerRouter } from './routes/interviewer.routes';
 import { confirmRouter } from './routes/confirm.routes';
 import { configRouter } from './routes/config.routes';
 import { sharepointRouter } from './routes/sharepoint.routes';
+import { testEmailRouter } from './routes/test-email.routes';
+import { roomsRouter } from './routes/rooms.routes';
+import { statisticsRouter } from './routes/statistics.routes';
+import { interviewerScheduleRouter } from './routes/interviewer-schedule.routes';
+import { calendarRouter } from './routes/calendar.routes';
+import { batchRouter } from './routes/batch.routes';
+import { candidatesRouter } from './routes/candidates.routes';
+import { exportRouter } from './routes/export.routes';
 import { schedulerService } from './services/scheduler.service';
 
 // 데이터 저장소 선택 (환경 변수로 제어)
@@ -108,6 +116,14 @@ app.use('/api/interviewers', interviewerRouter);
 app.use('/api/confirm', confirmRouter);
 app.use('/api/config', configRouter);
 app.use('/api/sharepoint', sharepointRouter);
+app.use('/api/rooms', roomsRouter);
+app.use('/api/statistics', statisticsRouter);
+app.use('/api/interviewers', interviewerScheduleRouter);
+app.use('/api/calendar', calendarRouter);
+app.use('/api/batch', batchRouter);
+app.use('/api/candidates', candidatesRouter);
+app.use('/api/export', exportRouter);
+app.use('/api', testEmailRouter); // 테스트 메일 라우트
 
 // Error handler
 app.use(errorHandler);
@@ -145,15 +161,32 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-// Start server
-const server = app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Server is running on port ${PORT}`);
-  logger.info(`Access from network: http://[YOUR_IP]:${PORT}`);
-  
-  // Start scheduler
-  schedulerService.start();
-  logger.info('Scheduler service started');
-});
+// Start server with error handling
+const startServer = () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`Server is running on port ${PORT}`);
+    logger.info(`Access from network: http://[YOUR_IP]:${PORT}`);
+    
+    // Start scheduler
+    schedulerService.start();
+    logger.info('Scheduler service started');
+  });
+
+  server.on('error', (error: any) => {
+    if (error.code === 'EADDRINUSE') {
+      logger.error(`Port ${PORT} is already in use. Please stop the process using this port or change the PORT environment variable.`);
+      logger.error(`To find and kill the process: Get-NetTCPConnection -LocalPort ${PORT} | Select-Object -ExpandProperty OwningProcess | Stop-Process -Force`);
+      process.exit(1);
+    } else {
+      logger.error('Server error:', error);
+      throw error;
+    }
+  });
+
+  return server;
+};
+
+const server = startServer();
 
 // Graceful shutdown을 위한 서버 종료 함수
 const gracefulShutdown = (signal: string) => {

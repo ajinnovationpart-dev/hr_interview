@@ -6,6 +6,7 @@ import { dataService } from '../services/dataService';
 import { emailService } from '../services/email.service';
 import { EmailTemplateService } from '../services/emailTemplate.service';
 import { commonSlotService } from '../services/commonSlot.service';
+import { geminiService } from '../services/gemini.service';
 import { generateJWT } from '../utils/jwt';
 import { calculateEndTime, calculateCandidateSlots, checkMinNoticeHours } from '../utils/timeSlots';
 import { logger } from '../utils/logger';
@@ -43,6 +44,192 @@ const createInterviewSchema = z.object({
   message: '팀장급 이상 1명은 필수로 포함해야 합니다',
 });
 
+// 고급 검색
+interviewRouter.get('/search', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const {
+      startDate,
+      endDate,
+      status,
+      interviewerId,
+      candidateId,
+      candidateName,
+      mainNotice,
+      teamName,
+      roomId,
+      hasCommonSlot,
+      sortBy = 'created',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 20,
+    } = req.query;
+    
+    let interviews = await dataService.getAllInterviews();
+    
+    // 필터링
+    if (startDate) {
+      interviews = interviews.filter(i => {
+        const date = i.proposed_date || i.confirmed_date;
+        return date && date >= startDate;
+      });
+    }
+    if (endDate) {
+      interviews = interviews.filter(i => {
+        const date = i.proposed_date || i.confirmed_date;
+        return date && date <= endDate;
+      });
+    }
+    if (status) {
+      const statusArray = Array.isArray(status) ? status : [status];
+      interviews = interviews.filter(i => statusArray.includes(i.status));
+    }
+    if (mainNotice) {
+      const search = (mainNotice as string).toLowerCase();
+      interviews = interviews.filter(i => 
+        i.main_notice?.toLowerCase().includes(search)
+      );
+    }
+    if (teamName) {
+      const search = (teamName as string).toLowerCase();
+      interviews = interviews.filter(i => 
+        i.team_name?.toLowerCase().includes(search)
+      );
+    }
+    if (roomId) {
+      interviews = interviews.filter(i => i.room_id === roomId);
+    }
+    
+    // 면접관 필터
+    if (interviewerId) {
+      const filtered = [];
+      for (const interview of interviews) {
+        const mappings = await dataService.getInterviewInterviewers(interview.interview_id);
+        if (mappings.some(m => m.interviewer_id === interviewerId)) {
+          filtered.push(interview);
+        }
+      }
+      interviews = filtered;
+    }
+    
+    // 지원자 필터
+    if (candidateId || candidateName) {
+      const filtered = [];
+      for (const interview of interviews) {
+        const candidates = await dataService.getCandidatesByInterview(interview.interview_id);
+        if (candidateId) {
+          if (candidates.some(c => c.candidate_id === candidateId)) {
+            filtered.push(interview);
+          }
+        }
+        if (candidateName) {
+          const search = (candidateName as string).toLowerCase();
+          if (candidates.some(c => c.name?.toLowerCase().includes(search))) {
+            filtered.push(interview);
+          }
+        }
+      }
+      interviews = filtered;
+    }
+    
+    // 공통 일정 필터
+    if (hasCommonSlot !== undefined) {
+      const filtered = [];
+      for (const interview of interviews) {
+        const schedule = await dataService.getConfirmedSchedule(interview.interview_id);
+        if (hasCommonSlot === 'true' && schedule) {
+          filtered.push(interview);
+        } else if (hasCommonSlot === 'false' && !schedule) {
+          filtered.push(interview);
+        }
+      }
+      interviews = filtered;
+    }
+    
+    // 정렬
+    interviews.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+      
+      if (sortBy === 'date') {
+        aValue = a.proposed_date || a.confirmed_date || '';
+        bValue = b.proposed_date || b.confirmed_date || '';
+      } else if (sortBy === 'created') {
+        aValue = a.created_at || '';
+        bValue = b.created_at || '';
+      } else if (sortBy === 'status') {
+        aValue = a.status || '';
+        bValue = b.status || '';
+      } else {
+        aValue = a.created_at || '';
+        bValue = b.created_at || '';
+      }
+      
+      if (sortOrder === 'asc') {
+        return aValue.localeCompare(bValue);
+      } else {
+        return bValue.localeCompare(aValue);
+      }
+    });
+    
+    // 페이징
+    const total = interviews.length;
+    const totalPages = Math.ceil(total / Number(limit));
+    const startIndex = (Number(page) - 1) * Number(limit);
+    const paginatedInterviews = interviews.slice(startIndex, startIndex + Number(limit));
+    
+    // 사용 가능한 필터 옵션
+    const allInterviews = await dataService.getAllInterviews();
+    const allStatuses = [...new Set(allInterviews.map(i => i.status))];
+    const allInterviewers = await dataService.getAllInterviewers();
+    const allRooms = await dataService.getAllRooms();
+    
+    res.json({
+      success: true,
+      data: {
+        interviews: paginatedInterviews,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages,
+        },
+        filters: {
+          applied: {
+            startDate: startDate || null,
+            endDate: endDate || null,
+            status: status || null,
+            interviewerId: interviewerId || null,
+            candidateId: candidateId || null,
+            candidateName: candidateName || null,
+            mainNotice: mainNotice || null,
+            teamName: teamName || null,
+            roomId: roomId || null,
+            hasCommonSlot: hasCommonSlot || null,
+          },
+          available: {
+            statuses: allStatuses,
+            interviewers: allInterviewers.map(iv => ({
+              interviewer_id: iv.interviewer_id,
+              name: iv.name,
+              email: iv.email,
+            })),
+            rooms: allRooms.map(r => ({
+              room_id: r.room_id,
+              room_name: r.room_name,
+            })),
+          },
+        },
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error searching interviews:', error);
+    throw new AppError(500, '면접 검색 실패');
+  }
+});
+
 // 대시보드 통계 조회
 interviewRouter.get('/dashboard', adminAuth, async (req: Request, res: Response) => {
   try {
@@ -53,6 +240,11 @@ interviewRouter.get('/dashboard', adminAuth, async (req: Request, res: Response)
       partial: interviews.filter(i => i.status === 'PARTIAL').length,
       confirmed: interviews.filter(i => i.status === 'CONFIRMED').length,
       noCommon: interviews.filter(i => i.status === 'NO_COMMON').length,
+      scheduled: interviews.filter(i => i.status === 'SCHEDULED').length,
+      inProgress: interviews.filter(i => i.status === 'IN_PROGRESS').length,
+      completed: interviews.filter(i => i.status === 'COMPLETED').length,
+      cancelled: interviews.filter(i => i.status === 'CANCELLED').length,
+      noShow: interviews.filter(i => i.status === 'NO_SHOW').length,
     };
 
     // 최근 면접 10개 (최신순)
@@ -150,6 +342,252 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
       throw error;
     }
     throw new AppError(500, '면접 상세 조회 실패');
+  }
+});
+
+// 면접 삭제
+interviewRouter.delete('/:id', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+
+    // 면접 및 관련 데이터 삭제 (cascade)
+    await dataService.deleteInterview(interviewId);
+
+    logger.info(`Interview ${interviewId} deleted by admin`);
+
+    res.json({
+      success: true,
+      message: '면접이 삭제되었습니다',
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error deleting interview:', error);
+    throw new AppError(500, '면접 삭제 실패');
+  }
+});
+
+// 포털 링크 생성 (면접관별)
+interviewRouter.get('/:id/portal-link/:interviewerId', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interviewerId = req.params.interviewerId;
+
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+
+    const allInterviewers = await dataService.getAllInterviewers();
+    const interviewer = allInterviewers.find(iv => iv.interviewer_id === interviewerId);
+
+    if (!interviewer || !interviewer.email) {
+      throw new AppError(404, '면접관을 찾을 수 없습니다');
+    }
+
+    const token = generateJWT({
+      email: interviewer.email,
+      role: 'INTERVIEWER',
+      interviewerId: interviewer.interviewer_id,
+      interviewId,
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const portalLink = `${frontendUrl}/confirm/${token}`;
+
+    res.json({
+      success: true,
+      data: {
+        portalLink,
+        interviewerName: interviewer.name,
+        interviewerEmail: interviewer.email,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error generating portal link:', error);
+    throw new AppError(500, '포털 링크 생성 실패');
+  }
+});
+
+// 리마인더 수동 발송
+interviewRouter.post('/:id/remind', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+
+    // 면접관 매핑 조회
+    const mappings = await dataService.getInterviewInterviewers(interviewId);
+    const allInterviewers = await dataService.getAllInterviewers();
+    const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const config = await dataService.getConfig();
+    const templateService = new EmailTemplateService({
+      company_logo_url: config.company_logo_url,
+      company_address: config.company_address,
+      parking_info: config.parking_info,
+      dress_code: config.dress_code || '비즈니스 캐주얼',
+      email_greeting: config.email_greeting,
+      email_company_name: config.email_company_name,
+      email_department_name: config.email_department_name,
+      email_contact_email: config.email_contact_email,
+      email_footer_text: config.email_footer_text,
+    });
+
+    let sentCount = 0;
+    const errors: string[] = [];
+
+    // 미응답 면접관에게만 리마인더 발송
+    for (const mapping of mappings) {
+      if (mapping.responded_at) continue; // 이미 응답한 면접관은 제외
+
+      const interviewer = interviewerMap.get(mapping.interviewer_id);
+      if (!interviewer || !interviewer.email || !interviewer.is_active) {
+        continue;
+      }
+
+      try {
+        const token = generateJWT({
+          email: interviewer.email,
+          role: 'INTERVIEWER',
+          interviewerId: interviewer.interviewer_id,
+          interviewId,
+        });
+
+        const confirmLink = `${frontendUrl}/confirm/${token}`;
+
+        const template = templateService.generateReminderEmail({
+          interviewerName: interviewer.name,
+          mainNotice: interview.main_notice,
+          teamName: interview.team_name,
+          confirmLink,
+          reminderCount: 1,
+        });
+
+        await emailService.sendEmail({
+          to: [interviewer.email],
+          subject: `[리마인더] 면접 일정 조율 - ${interview.main_notice}`,
+          htmlBody: template,
+        });
+
+        // 리마인더 발송 기록 업데이트
+        await dataService.updateReminderSent(interviewId, interviewer.interviewer_id);
+        sentCount++;
+
+        logger.info(`Reminder sent to ${interviewer.email} for interview ${interviewId}`);
+      } catch (error: any) {
+        logger.error(`Failed to send reminder to ${interviewer.email}:`, error);
+        errors.push(`${interviewer.name} (${interviewer.email}): ${error.message}`);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        sentCount,
+        totalNonResponded: mappings.filter(m => !m.responded_at).length,
+        errors: errors.length > 0 ? errors : undefined,
+      },
+      message: `${sentCount}명의 면접관에게 리마인더가 발송되었습니다.`,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error sending reminders:', error);
+    throw new AppError(500, '리마인더 발송 실패');
+  }
+});
+
+// AI 분석으로 공통 시간대 찾기
+interviewRouter.post('/:id/analyze', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+
+    // Gemini AI 사용 가능 여부 확인
+    if (!geminiService.isGeminiAvailable()) {
+      throw new AppError(503, 'Gemini AI를 사용할 수 없습니다. GEMINI_API_KEY 환경 변수를 확인해주세요.');
+    }
+
+    // 시간 선택 조회
+    const timeSelections = await dataService.getTimeSelectionsByInterview(interviewId);
+    
+    if (timeSelections.length === 0) {
+      throw new AppError(400, '분석할 시간 선택 데이터가 없습니다. 면접관들이 먼저 일정을 선택해야 합니다.');
+    }
+
+    // 면접관 정보 조회
+    const allInterviewers = await dataService.getAllInterviewers();
+    const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
+
+    // 면접관별로 시간 선택 그룹화
+    const selectionsByInterviewer = new Map<string, Array<{ date: string; startTime: string; endTime: string }>>();
+    
+    for (const selection of timeSelections) {
+      if (!selectionsByInterviewer.has(selection.interviewer_id)) {
+        selectionsByInterviewer.set(selection.interviewer_id, []);
+      }
+      selectionsByInterviewer.get(selection.interviewer_id)!.push({
+        date: selection.slot_date,
+        startTime: selection.start_time,
+        endTime: selection.end_time,
+      });
+    }
+
+    // Gemini AI 분석을 위한 데이터 준비
+    const selectionData = Array.from(selectionsByInterviewer.entries()).map(([interviewerId, slots]) => {
+      const interviewer = interviewerMap.get(interviewerId);
+      return {
+        interviewerId,
+        interviewerName: interviewer?.name || interviewerId,
+        availableSlots: slots,
+      };
+    });
+
+    logger.info(`🤖 Starting AI analysis for interview ${interviewId} with ${selectionData.length} interviewers`);
+
+    // Gemini AI 분석 실행
+    const analysisResult = await geminiService.findCommonSlots(selectionData);
+
+    if (!analysisResult.success) {
+      throw new AppError(500, analysisResult.error || 'AI 분석 중 오류가 발생했습니다.');
+    }
+
+    logger.info(`✅ AI analysis completed: Found ${analysisResult.commonSlots.length} common slots`);
+
+    res.json({
+      success: true,
+      data: {
+        commonSlots: analysisResult.commonSlots,
+        analyzedCount: selectionData.length,
+        totalSelections: timeSelections.length,
+      },
+      message: `${analysisResult.commonSlots.length}개의 공통 시간대를 찾았습니다.`,
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error in AI analysis:', error);
+    throw new AppError(500, 'AI 분석 실패');
   }
 });
 
@@ -600,5 +1038,473 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     }
     logger.error('Error creating interview:', error);
     throw new AppError(500, '면접 생성 실패');
+  }
+});
+
+// 면접 일정 수정
+interviewRouter.put('/:id/schedule', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+    
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    
+    // 완료/취소된 면접은 변경 불가
+    if (['COMPLETED', 'CANCELLED'].includes(interview.status)) {
+      throw new AppError(400, '완료되거나 취소된 면접은 변경할 수 없습니다');
+    }
+    
+    const updates: any = {};
+    const oldInterview = { ...interview };
+    
+    // 변경 사항 수집
+    if (req.body.interviewDate) updates.proposed_date = req.body.interviewDate;
+    if (req.body.startTime) {
+      updates.proposed_start_time = req.body.startTime;
+      if (req.body.duration) {
+        updates.proposed_end_time = calculateEndTime(req.body.startTime, req.body.duration);
+      }
+    }
+    if (req.body.roomId) updates.room_id = req.body.roomId;
+    
+    // 면접관 변경
+    if (req.body.interviewerIds && Array.isArray(req.body.interviewerIds)) {
+      await dataService.updateInterviewInterviewers(interviewId, req.body.interviewerIds);
+    }
+    
+    // 면접 정보 업데이트
+    if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
+      await dataService.updateInterview(interviewId, updates);
+      
+      // 변경 이력 기록
+      await dataService.createInterviewHistory({
+        history_id: `HIST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        interview_id: interviewId,
+        change_type: 'schedule',
+        old_value: JSON.stringify(oldInterview),
+        new_value: JSON.stringify({ ...interview, ...updates }),
+        changed_by: req.user?.email || 'system',
+        changed_at: new Date().toISOString(),
+        reason: req.body.reason,
+      });
+      
+      // 변경 알림 발송
+      const updatedInterview = await dataService.getInterviewById(interviewId);
+      const mappings = await dataService.getInterviewInterviewers(interviewId);
+      const allInterviewers = await dataService.getAllInterviewers();
+      const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
+      const interviewerEmails = mappings
+        .map(m => interviewerMap.get(m.interviewer_id)?.email)
+        .filter(Boolean) as string[];
+      
+      const candidates = await dataService.getCandidatesByInterview(interviewId);
+      const candidateEmails = candidates.map(c => c.email).filter(Boolean) as string[];
+      
+      const allRecipients = [...interviewerEmails, ...candidateEmails];
+      
+      if (allRecipients.length > 0) {
+        const changeSummary = [];
+        if (updates.proposed_date && updates.proposed_date !== oldInterview.proposed_date) {
+          changeSummary.push(`날짜: ${oldInterview.proposed_date} → ${updates.proposed_date}`);
+        }
+        if (updates.proposed_start_time && updates.proposed_start_time !== oldInterview.proposed_start_time) {
+          changeSummary.push(`시간: ${oldInterview.proposed_start_time} → ${updates.proposed_start_time}`);
+        }
+        if (updates.room_id && updates.room_id !== oldInterview.room_id) {
+          const oldRoom = updates.room_id ? await dataService.getRoomById(oldInterview.room_id || '') : null;
+          const newRoom = await dataService.getRoomById(updates.room_id);
+          changeSummary.push(`면접실: ${oldRoom?.room_name || '미지정'} → ${newRoom?.room_name || '미지정'}`);
+        }
+        
+        const emailContent = `
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #ff9800; color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background-color: #f9f9f9; }
+                .changes { background-color: #fff3cd; border-left: 4px solid #ff9800; padding: 15px; margin: 20px 0; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h2>면접 일정 변경 안내</h2>
+                </div>
+                <div class="content">
+                  <p>안녕하세요,</p>
+                  <p><strong>${updatedInterview.main_notice} - ${updatedInterview.team_name}</strong> 면접 일정이 변경되었습니다.</p>
+                  <div class="changes">
+                    <h3>변경 사항:</h3>
+                    <ul>
+                      ${changeSummary.map(c => `<li>${c}</li>`).join('')}
+                    </ul>
+                  </div>
+                  <p><strong>새로운 일정:</strong></p>
+                  <ul>
+                    <li>날짜: ${updatedInterview.proposed_date}</li>
+                    <li>시간: ${updatedInterview.proposed_start_time} ~ ${updatedInterview.proposed_end_time}</li>
+                  </ul>
+                  <p>변경된 일정에 참석 가능하신지 확인 부탁드립니다.</p>
+                  <p>문의사항이 있으시면 인사팀으로 연락 주시기 바랍니다.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `;
+        
+        try {
+          await emailService.sendEmail({
+            to: allRecipients,
+            subject: `[면접 일정 변경] ${updatedInterview.main_notice} - ${updatedInterview.team_name}`,
+            htmlBody: emailContent,
+          });
+        } catch (error) {
+          logger.error('Failed to send schedule change notification:', error);
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: '면접 일정이 변경되었습니다',
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error updating interview schedule:', error);
+    throw new AppError(500, '면접 일정 변경 실패');
+  }
+});
+
+// 면접 취소
+interviewRouter.post('/:id/cancel', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const { reason, notifyAll = true } = req.body;
+    
+    if (!reason) {
+      throw new AppError(400, '취소 사유를 입력해주세요');
+    }
+    
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    
+    if (interview.status === 'COMPLETED') {
+      throw new AppError(400, '완료된 면접은 취소할 수 없습니다');
+    }
+    
+    // 상태 변경
+    await dataService.updateInterviewStatus(interviewId, 'CANCELLED');
+    
+    // 취소 정보 저장
+    await dataService.updateInterview(interviewId, {
+      cancellation_reason: reason,
+      cancelled_at: new Date().toISOString(),
+      cancelled_by: req.user?.email || 'system',
+      updated_at: new Date().toISOString(),
+    });
+    
+    // 취소 이력 기록
+    await dataService.createInterviewHistory({
+      history_id: `HIST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      interview_id: interviewId,
+      change_type: 'status',
+      old_value: JSON.stringify({ status: interview.status }),
+      new_value: JSON.stringify({ status: 'CANCELLED' }),
+      changed_by: req.user?.email || 'system',
+      changed_at: new Date().toISOString(),
+      reason,
+    });
+    
+    // 취소 알림 발송
+    if (notifyAll) {
+      const mappings = await dataService.getInterviewInterviewers(interviewId);
+      const allInterviewers = await dataService.getAllInterviewers();
+      const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
+      const interviewerEmails = mappings
+        .map(m => interviewerMap.get(m.interviewer_id)?.email)
+        .filter(Boolean) as string[];
+      
+      const candidates = await dataService.getCandidatesByInterview(interviewId);
+      const candidateEmails = candidates.map(c => c.email).filter(Boolean) as string[];
+      
+      const allRecipients = [...interviewerEmails, ...candidateEmails];
+      
+      if (allRecipients.length > 0) {
+        const emailContent = `
+          <html>
+            <head>
+              <meta charset="UTF-8">
+              <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { background-color: #f44336; color: white; padding: 20px; text-align: center; }
+                .content { padding: 20px; background-color: #f9f9f9; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <h2>면접 취소 안내</h2>
+                </div>
+                <div class="content">
+                  <p>안녕하세요,</p>
+                  <p><strong>${interview.main_notice} - ${interview.team_name}</strong> 면접이 취소되었습니다.</p>
+                  <p><strong>취소 사유:</strong> ${reason}</p>
+                  <p>불편을 드려 죄송합니다. 문의사항이 있으시면 인사팀으로 연락 주시기 바랍니다.</p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `;
+        
+        try {
+          await emailService.sendEmail({
+            to: allRecipients,
+            subject: `[면접 취소] ${interview.main_notice} - ${interview.team_name}`,
+            htmlBody: emailContent,
+          });
+        } catch (error) {
+          logger.error('Failed to send cancellation notification:', error);
+        }
+      }
+    }
+    
+    logger.info(`Interview ${interviewId} cancelled by ${req.user?.email}`);
+    
+    res.json({
+      success: true,
+      message: '면접이 취소되었습니다',
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error cancelling interview:', error);
+    throw new AppError(500, '면접 취소 실패');
+  }
+});
+
+// 면접 완료 처리
+interviewRouter.post('/:id/complete', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const { completedAt, notes, actualDuration } = req.body;
+    
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    
+    if (!['IN_PROGRESS', 'SCHEDULED', 'CONFIRMED'].includes(interview.status)) {
+      throw new AppError(400, '진행 중인 면접만 완료 처리할 수 있습니다');
+    }
+    
+    // 상태 변경
+    await dataService.updateInterviewStatus(interviewId, 'COMPLETED');
+    
+    // 완료 정보 저장
+    await dataService.updateInterview(interviewId, {
+      completed_at: completedAt || new Date().toISOString(),
+      interview_notes: notes,
+      actual_duration: actualDuration,
+      updated_at: new Date().toISOString(),
+    });
+    
+    // 완료 이력 기록
+    await dataService.createInterviewHistory({
+      history_id: `HIST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      interview_id: interviewId,
+      change_type: 'status',
+      old_value: JSON.stringify({ status: interview.status }),
+      new_value: JSON.stringify({ status: 'COMPLETED' }),
+      changed_by: req.user?.email || 'system',
+      changed_at: new Date().toISOString(),
+    });
+    
+    logger.info(`Interview ${interviewId} completed by ${req.user?.email}`);
+    
+    res.json({
+      success: true,
+      message: '면접이 완료 처리되었습니다',
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error completing interview:', error);
+    throw new AppError(500, '면접 완료 처리 실패');
+  }
+});
+
+// 노쇼 처리
+interviewRouter.post('/:id/no-show', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const { noShowType, reason, interviewerId } = req.body;
+    
+    if (!noShowType || !['candidate', 'interviewer', 'both'].includes(noShowType)) {
+      throw new AppError(400, '올바른 노쇼 유형을 선택해주세요');
+    }
+    
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    
+    // 상태 변경
+    await dataService.updateInterviewStatus(interviewId, 'NO_SHOW');
+    
+    // 노쇼 정보 저장
+    await dataService.updateInterview(interviewId, {
+      no_show_type: noShowType,
+      no_show_reason: reason,
+      no_show_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    
+    // 면접관 노쇼인 경우 해당 면접관만 기록
+    if (noShowType === 'interviewer' && interviewerId) {
+      // interview_interviewers 테이블에 노쇼 정보 추가 (필요시)
+      // 현재는 interview 테이블에만 저장
+    }
+    
+    // 노쇼 이력 기록
+    await dataService.createInterviewHistory({
+      history_id: `HIST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      interview_id: interviewId,
+      change_type: 'status',
+      old_value: JSON.stringify({ status: interview.status }),
+      new_value: JSON.stringify({ status: 'NO_SHOW', noShowType, reason }),
+      changed_by: req.user?.email || 'system',
+      changed_at: new Date().toISOString(),
+      reason,
+    });
+    
+    logger.info(`Interview ${interviewId} marked as NO_SHOW (${noShowType}) by ${req.user?.email}`);
+    
+    res.json({
+      success: true,
+      message: '노쇼 처리되었습니다',
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error handling no-show:', error);
+    throw new AppError(500, '노쇼 처리 실패');
+  }
+});
+
+// 면접 이력 조회
+interviewRouter.get('/:id/history', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+    
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    
+    const history = await dataService.getInterviewHistory(interviewId);
+    
+    res.json({
+      success: true,
+      data: {
+        interviewId,
+        history,
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error getting interview history:', error);
+    throw new AppError(500, '면접 이력 조회 실패');
+  }
+});
+
+// 면접 상태 변경
+interviewRouter.put('/:id/status', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const { status, reason } = req.body;
+    
+    if (!status) {
+      throw new AppError(400, '상태를 입력해주세요');
+    }
+    
+    const validStatuses = ['PENDING', 'PARTIAL', 'CONFIRMED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'NO_COMMON'];
+    if (!validStatuses.includes(status)) {
+      throw new AppError(400, '올바른 상태를 입력해주세요');
+    }
+    
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    
+    // 상태 전환 검증
+    const allowedTransitions: Record<string, string[]> = {
+      'PENDING': ['PARTIAL', 'CONFIRMED', 'CANCELLED', 'NO_COMMON'],
+      'PARTIAL': ['CONFIRMED', 'CANCELLED', 'NO_COMMON'],
+      'CONFIRMED': ['SCHEDULED', 'CANCELLED'],
+      'SCHEDULED': ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'],
+      'IN_PROGRESS': ['COMPLETED', 'CANCELLED'],
+      'COMPLETED': [],
+      'CANCELLED': [],
+      'NO_SHOW': [],
+      'NO_COMMON': ['CANCELLED'],
+    };
+    
+    if (!allowedTransitions[interview.status]?.includes(status)) {
+      throw new AppError(400, `상태 전환이 불가능합니다: ${interview.status} → ${status}`);
+    }
+    
+    // 상태 변경
+    await dataService.updateInterviewStatus(interviewId, status);
+    
+    // 상태별 후속 처리
+    if (status === 'CANCELLED' && reason) {
+      await dataService.updateInterview(interviewId, {
+        cancellation_reason: reason,
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: req.user?.email || 'system',
+      });
+    }
+    
+    // 이력 기록
+    await dataService.createInterviewHistory({
+      history_id: `HIST_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      interview_id: interviewId,
+      change_type: 'status',
+      old_value: JSON.stringify({ status: interview.status }),
+      new_value: JSON.stringify({ status }),
+      changed_by: req.user?.email || 'system',
+      changed_at: new Date().toISOString(),
+      reason,
+    });
+    
+    logger.info(`Interview ${interviewId} status changed: ${interview.status} → ${status} by ${req.user?.email}`);
+    
+    res.json({
+      success: true,
+      message: '면접 상태가 변경되었습니다',
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error updating interview status:', error);
+    throw new AppError(500, '면접 상태 변경 실패');
   }
 });

@@ -153,7 +153,7 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
             firstSlot.date,
             firstSlot.startTime,
             firstSlot.endTime,
-            candidateNames
+            candidates
           );
         } catch (error) {
           console.error('Failed to send confirmation email:', error);

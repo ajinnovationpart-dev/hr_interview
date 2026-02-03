@@ -1,135 +1,204 @@
-# 면접 일정 자동화 시스템 v3.0 구현 완료 요약
+# 전체 기능 구현 완료 요약
 
-## ✅ 완료된 작업
+## ✅ 구현 완료된 기능 목록
 
-### 1. Google Apps Script 업데이트 (9개 시트 구조)
-- ✅ `interviews` - 면접 기본 정보
-- ✅ `candidates` - 면접자 정보 (신규)
-- ✅ `interview_candidates` - 면접-면접자 매핑 (신규)
-- ✅ `candidate_interviewers` - 면접자별 담당 면접관 (신규, N:N)
-- ✅ `interviewers` - 면접관 DB (is_team_lead 추가)
-- ✅ `interview_interviewers` - 면접-면접관 매핑 (reminder_sent_count 추가)
-- ✅ `time_selections` - 일정 선택 (30분 단위)
-- ✅ `confirmed_schedules` - 확정 일정 (candidate_id 추가)
-- ✅ `config` - 시스템 설정 (신규)
+### Phase 1: 필수 기능 (완료)
 
-### 2. Backend 서비스 구현
+#### 1. 면접실 관리 기능
+- ✅ 면접실 CRUD (생성, 조회, 수정, 삭제)
+- ✅ 면접실 가용성 조회 API
+- ✅ 프론트엔드 면접실 관리 페이지 (`RoomManagePage.tsx`)
 
-#### 2.1 Google Sheets Service
-- ✅ N:N 매핑 구조 지원
-- ✅ Config 조회/업데이트 기능
-- ✅ 면접자별 담당 면접관 조회
+**API 엔드포인트:**
+- `GET /api/rooms` - 면접실 목록 조회
+- `GET /api/rooms/:id` - 면접실 상세 조회
+- `POST /api/rooms` - 면접실 등록
+- `PUT /api/rooms/:id` - 면접실 수정
+- `DELETE /api/rooms/:id` - 면접실 삭제
+- `GET /api/rooms/:id/availability` - 면접실 가용성 조회
 
-#### 2.2 Time Slots Utility
-- ✅ 30분 단위 타임 슬롯 생성
-- ✅ 점심시간 자동 제외
-- ✅ 면접 종료 시간 자동 계산
-- ✅ 면접자별 시간 슬롯 계산
-- ✅ 최소 사전 통보 시간 확인
+#### 2. 면접 상태 관리 강화
+- ✅ 상태 확장: `SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `NO_SHOW` 추가
+- ✅ 상태 변경 API (`PUT /api/interviews/:id/status`)
+- ✅ 상태 전환 검증 로직
+- ✅ 상태별 후속 처리 (취소 알림, 완료 처리 등)
 
-#### 2.3 Email Template Service
-- ✅ 면접관 초대 메일 템플릿
-- ✅ D-1 리마인더 템플릿
-- ✅ 미응답 리마인더 템플릿
-- ✅ 확정 알림 템플릿
-- ✅ 설정 기반 동적 템플릿 (로고, 주소, 주차, 복장)
+#### 3. 면접 일정 수정/취소
+- ✅ 일정 수정 API (`PUT /api/interviews/:id/schedule`)
+- ✅ 일정 취소 API (`POST /api/interviews/:id/cancel`)
+- ✅ 충돌 검사 로직
+- ✅ 변경 알림 발송
+- ✅ 프론트엔드 UI (InterviewDetailPage에 모달 추가)
 
-#### 2.4 Scheduler Service
-- ✅ 미응답 리마인더 (48시간, 72시간)
-- ✅ D-1 리마인더 (면접 전날 오후 5시)
-- ✅ 자동 확정 처리 (매일 오전 9시)
-- ✅ 설정 기반 동적 스케줄링
+#### 4. 면접 완료/노쇼 처리
+- ✅ 면접 완료 처리 API (`POST /api/interviews/:id/complete`)
+- ✅ 노쇼 처리 API (`POST /api/interviews/:id/no-show`)
+- ✅ 프론트엔드 UI (모달)
 
-### 3. API 라우트 업데이트
+#### 5. 면접 이력 관리
+- ✅ 이력 기록 기능 (`createInterviewHistory`)
+- ✅ 이력 조회 API (`GET /api/interviews/:id/history`)
 
-#### 3.1 면접 생성 API (N:N 구조)
-- ✅ 면접자별 담당 면접관 배정
-- ✅ 30분 단위 시간 슬롯 자동 계산
-- ✅ 팀장급 필수 검증
-- ✅ 최소 사전 통보 시간 검증
-- ✅ 면접관별 맞춤 메일 발송 (담당 면접자 정보 포함)
+### Phase 2: 조회 및 검색 강화 (완료)
 
-#### 3.2 Config API (신규)
-- ✅ 설정 조회: `GET /api/config`
-- ✅ 설정 업데이트: `PUT /api/config`
+#### 6. 고급 필터링 및 검색
+- ✅ 고급 검색 API (`GET /api/interviews/search`)
+- ✅ 다중 필터 지원 (날짜, 상태, 면접관, 지원자, 면접실 등)
+- ✅ 페이징 및 정렬
 
-### 4. 주요 기능
+#### 7. 면접관별 스케줄 조회
+- ✅ 면접관별 스케줄 조회 API (`GET /api/interviewers/:id/schedule`)
+- ✅ 가용 시간 슬롯 표시
+- ✅ 통계 정보 제공
 
-#### 4.1 N:N 매핑
-- 면접자별로 다른 면접관 배정 가능
-- 예: 면접자 A는 김영준+정주연, 면접자 B는 김종휘+김희수
-- PRIMARY/SECONDARY 역할 구분
+#### 8. 캘린더 뷰
+- ✅ 캘린더 뷰 API (`GET /api/calendar/interviews`)
+- ✅ 이벤트 형식 데이터 제공
+- ✅ 충돌 감지 기능
 
-#### 4.2 30분 단위 타임 슬롯
-- 09:00, 09:30, 10:00, 10:30... 18:00까지
-- 점심시간(12:00~13:00) 자동 제외
-- 설정에서 시간대 변경 가능
+#### 9. 면접관 가용성 조회
+- ✅ 면접관 가용성 조회 API (`GET /api/interviewers/:id/availability`)
+- ✅ 날짜별 가용 슬롯 계산
 
-#### 4.3 메일 발송 규칙 관리
-- 리마인더 발송 시간 설정 가능
-- 메일 템플릿 관리
-- 발송 시간대 제한
-- 회사 정보 동적 삽입
+### Phase 3: 통계 및 리포트 (완료)
 
-## 📋 다음 단계 (Frontend)
+#### 10. 통계 API
+- ✅ 전체 통계 개요 (`GET /api/statistics/overview`)
+- ✅ 면접관별 통계 (`GET /api/statistics/interviewers/:id`)
+- ✅ 면접실 사용률 통계 (`GET /api/statistics/rooms`)
 
-### 1. 면접 등록 화면 업데이트
-- [ ] 면접자별 담당 면접관 선택 UI
-- [ ] 30분 단위 타임 슬롯 선택 UI
-- [ ] 종료 시간 자동 계산 표시
-- [ ] 팀장급 필수 검증
+#### 11. Excel 내보내기
+- ✅ Excel 내보내기 API (`GET /api/export/interviews`)
+- ✅ CSV 형식 지원
+- ✅ 상세 정보 포함 옵션
 
-### 2. 면접 상세 화면
-- [ ] N:N 매핑 구조 표시
-- [ ] 면접자별 시간 슬롯 표시
-- [ ] 면접자별 담당 면접관 표시
+### Phase 4: 고급 기능 (완료)
 
-### 3. 설정 관리 화면
-- [ ] 설정 조회/수정 UI
-- [ ] 타임 슬롯 설정
-- [ ] 리마인더 설정
-- [ ] 회사 정보 설정
+#### 12. 일괄 작업
+- ✅ 일괄 면접 생성 API (`POST /api/batch/interviews`)
+- ✅ 일괄 상태 변경 API (`PUT /api/batch/interviews/status`)
+
+#### 13. 지원자 상세 관리
+- ✅ 지원자 CRUD API (`/api/candidates`)
+- ✅ 지원자 상태 관리
+- ✅ 지원자별 면접 이력 조회
+- ✅ 타임라인 기능
+
+#### 14. 알림 시스템 강화
+- ✅ 일정 변경 알림
+- ✅ 취소 알림
+- ✅ 완료 알림
+
+## 📁 새로 생성된 파일
+
+### Backend
+- `backend/src/types/interview.types.ts` - 타입 정의
+- `backend/src/routes/rooms.routes.ts` - 면접실 관리 라우트
+- `backend/src/routes/statistics.routes.ts` - 통계 라우트
+- `backend/src/routes/interviewer-schedule.routes.ts` - 면접관 스케줄 라우트
+- `backend/src/routes/calendar.routes.ts` - 캘린더 뷰 라우트
+- `backend/src/routes/batch.routes.ts` - 일괄 작업 라우트
+- `backend/src/routes/candidates.routes.ts` - 지원자 관리 라우트
+- `backend/src/routes/export.routes.ts` - Excel 내보내기 라우트
+
+### Frontend
+- `frontend/src/pages/admin/RoomManagePage.tsx` - 면접실 관리 페이지
+
+### 수정된 파일
+- `backend/src/services/dataService.ts` - 인터페이스 확장
+- `backend/src/services/oneDriveLocal.service.ts` - 새 메서드 추가
+- `backend/src/routes/interview.routes.ts` - 일정 수정/취소/완료/노쇼 API 추가
+- `backend/src/server.ts` - 새 라우트 등록
+- `frontend/src/pages/admin/InterviewDetailPage.tsx` - 일정 수정/취소/완료 UI 추가
+- `frontend/src/App.tsx` - 새 페이지 라우트 추가
+- `frontend/src/layouts/AdminLayout.tsx` - 면접실 관리 메뉴 추가
+
+## 📊 Excel 시트 구조 업데이트 필요
+
+다음 시트들이 추가/수정되어야 합니다:
+
+### 새로 추가할 시트
+
+#### 1. rooms (면접실)
+```
+room_id | room_name | location | capacity | facilities | status | notes | created_at | updated_at
+```
+
+#### 2. interview_history (면접 이력)
+```
+history_id | interview_id | change_type | old_value | new_value | changed_by | changed_at | reason
+```
+
+### 수정할 시트
+
+#### interviews 시트 확장
+기존 컬럼에 추가:
+- `room_id` (J열)
+- `cancellation_reason` (K열)
+- `completed_at` (L열)
+- `interview_notes` (M열)
+- `no_show_type` (N열)
+- `no_show_reason` (O열)
+
+#### candidates 시트 확장
+기존 컬럼에 추가:
+- `status` (F열)
+- `resume_url` (G열)
+- `notes` (H열)
 
 ## 🔧 환경 변수
 
-기존 환경 변수에 추가할 항목 없음 (기존 `.env` 파일 그대로 사용)
+추가 환경 변수는 필요 없습니다. 기존 설정으로 동작합니다.
 
-## 📝 Google Apps Script 배포
+## 🚀 사용 방법
 
-1. Google Sheets에서 Apps Script 편집기 열기
-2. `google-apps-script/Code.gs` 내용 복사/붙여넣기
-3. API 키 확인: `const API_KEY = 'aj-innovation-2025-secret-key-xyz123';`
-4. 배포 → 새 배포 → 웹 앱으로 실행
-5. 배포 URL을 `GOOGLE_APPS_SCRIPT_URL`에 설정
+### 1. 면접실 관리
+1. 관리자 페이지 → "면접실 관리" 메뉴 클릭
+2. "면접실 등록" 버튼으로 새 면접실 등록
+3. 수정/삭제 버튼으로 관리
 
-## 🎯 주요 변경 사항
+### 2. 면접 일정 수정
+1. 면접 상세 페이지에서 "일정 수정" 버튼 클릭
+2. 날짜, 시간, 소요 시간 수정
+3. 관련자에게 자동으로 변경 알림 발송
 
-### 기존 vs 신규
+### 3. 면접 취소
+1. 면접 상세 페이지에서 "취소" 버튼 클릭
+2. 취소 사유 입력
+3. 관련자에게 자동으로 취소 알림 발송
 
-| 항목 | 기존 | 신규 |
-|------|------|------|
-| 면접자 관리 | 단일 필드 | 별도 테이블 (candidates) |
-| 면접관 배정 | 면접 전체 | 면접자별 (N:N) |
-| 타임 슬롯 | 자유 입력 | 30분 단위 고정 |
-| 설정 관리 | 하드코딩 | Config 시트 |
-| 메일 템플릿 | 단순 HTML | 동적 템플릿 서비스 |
-| 리마인더 | 1회 | 설정 가능 (최대 2회) |
+### 4. 면접 완료/노쇼 처리
+1. 면접 상세 페이지에서 "완료 처리" 또는 "노쇼 처리" 버튼 클릭
+2. 필요한 정보 입력
+3. 상태 자동 업데이트
 
-## ✅ 테스트 체크리스트
+### 5. 통계 조회
+- `GET /api/statistics/overview` - 전체 통계
+- `GET /api/statistics/interviewers/:id` - 면접관별 통계
+- `GET /api/statistics/rooms` - 면접실 사용률
 
-- [ ] 면접 생성 (N:N 구조)
-- [ ] 면접자별 담당 면접관 배정
-- [ ] 30분 단위 타임 슬롯 생성
-- [ ] 메일 발송 (면접관별 맞춤)
-- [ ] 리마인더 발송 (48시간, 72시간)
-- [ ] D-1 리마인더 발송
-- [ ] 자동 확정 처리
-- [ ] 설정 조회/수정
-- [ ] 팀장급 필수 검증
-- [ ] 최소 사전 통보 시간 검증
+### 6. Excel 내보내기
+- `GET /api/export/interviews?startDate=2025-01-01&endDate=2025-12-31&format=xlsx`
 
-## 📚 참고 문서
+## ⚠️ 주의사항
 
-- [기술 명세서](./docs/SPECIFICATION.md) - 원본 명세서
-- [Google Apps Script 코드](./google-apps-script/Code.gs) - Apps Script 구현
-- [API 문서](./docs/API.md) - API 엔드포인트 문서
+1. **Excel 시트 구조**: 새 시트(`rooms`, `interview_history`)를 Excel 파일에 추가해야 합니다.
+2. **기존 데이터**: 기존 면접 데이터에 `room_id` 등 새 필드가 없어도 동작하지만, 새 기능을 사용하려면 데이터를 업데이트해야 합니다.
+3. **면접실 삭제**: 사용 중인 면접이 있는 면접실은 삭제할 수 없습니다.
+
+## 📝 다음 단계 (선택사항)
+
+1. 프론트엔드 통계 대시보드 페이지 추가
+2. 캘린더 뷰 프론트엔드 구현
+3. 지원자 관리 페이지 프론트엔드 구현
+4. 면접관별 스케줄 조회 페이지 프론트엔드 구현
+
+## ✅ 완료 체크리스트
+
+- [x] Phase 1: 필수 기능 (면접실, 상태 관리, 일정 수정/취소, 완료/노쇼, 이력)
+- [x] Phase 2: 조회 및 검색 (고급 검색, 면접관 스케줄, 캘린더, 가용성)
+- [x] Phase 3: 통계 및 리포트 (통계 API, Excel 내보내기)
+- [x] Phase 4: 고급 기능 (일괄 작업, 지원자 관리, 알림 강화)
+- [x] 프론트엔드 UI (면접실 관리, 면접 상세 페이지 기능 추가)
+
+모든 기능이 성공적으로 구현되었습니다! 🎉

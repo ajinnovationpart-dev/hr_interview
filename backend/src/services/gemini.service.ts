@@ -1,0 +1,165 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { logger } from '../utils/logger';
+import { TimeSlot } from './commonSlot.service';
+
+export interface SelectionData {
+  interviewerId: string;
+  interviewerName?: string;
+  availableSlots: TimeSlot[];
+}
+
+export interface GeminiAnalysisResult {
+  success: boolean;
+  commonSlots: TimeSlot[];
+  error?: string;
+}
+
+export class GeminiService {
+  private genAI: GoogleGenerativeAI | null = null;
+  private isAvailable: boolean = false;
+
+  constructor() {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      try {
+        this.genAI = new GoogleGenerativeAI(apiKey);
+        this.isAvailable = true;
+        logger.info('✅ Gemini AI service initialized');
+      } catch (error) {
+        logger.error('❌ Failed to initialize Gemini AI:', error);
+        this.isAvailable = false;
+      }
+    } else {
+      logger.warn('⚠️ GEMINI_API_KEY not found in environment variables');
+      this.isAvailable = false;
+    }
+  }
+
+  /**
+   * Gemini AI를 사용하여 공통 시간대를 분석합니다.
+   * 여러 면접관의 가용 시간 중 모든 면접관이 가능한 시간대를 찾습니다.
+   */
+  async findCommonSlots(selections: SelectionData[]): Promise<GeminiAnalysisResult> {
+    if (!this.isAvailable || !this.genAI) {
+      return {
+        success: false,
+        commonSlots: [],
+        error: 'Gemini AI is not available. Please set GEMINI_API_KEY in environment variables.',
+      };
+    }
+
+    if (selections.length === 0) {
+      return {
+        success: false,
+        commonSlots: [],
+        error: 'No selections provided',
+      };
+    }
+
+    try {
+      // 분석 데이터 준비
+      const analysisData = selections.map(s => ({
+        interviewerId: s.interviewerId,
+        interviewerName: s.interviewerName || s.interviewerId,
+        availableSlots: s.availableSlots,
+      }));
+
+      const prompt = `
+You are an expert recruitment coordinator for AJ Networks.
+Analyze the available time slots provided by multiple interviewers and find ALL common time slots where EVERY single interviewer is available.
+
+Data:
+${JSON.stringify(analysisData, null, 2)}
+
+Rules:
+1. Find time slots where ALL interviewers are available (intersection of all schedules)
+2. If there are overlapping time ranges (e.g., Interviewer A is free 10:00-12:00, Interviewer B is free 11:00-13:00), the common slot is the intersection (11:00-12:00)
+3. Group results by date
+4. Return only valid JSON array of TimeSlot objects with format: { date: "YYYY-MM-DD", startTime: "HH:mm", endTime: "HH:mm" }
+5. Sort results by date (earliest first), then by startTime
+6. If no common slots exist, return an empty array
+
+Output format (JSON array):
+[
+  { "date": "2025-02-01", "startTime": "10:00", "endTime": "11:00" },
+  { "date": "2025-02-01", "startTime": "14:00", "endTime": "15:00" }
+]
+`;
+
+      const model = this.genAI.getGenerativeModel({ 
+        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' 
+      });
+
+      logger.info(`🤖 Starting Gemini AI analysis for ${selections.length} interviewers`);
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text();
+
+      // JSON 파싱 시도
+      let parsedSlots: TimeSlot[] = [];
+      
+      try {
+        // JSON 코드 블록 제거 (```json ... ```)
+        const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) || text.match(/\[[\s\S]*\]/);
+        const jsonText = jsonMatch ? jsonMatch[1] || jsonMatch[0] : text;
+        parsedSlots = JSON.parse(jsonText.trim());
+      } catch (parseError) {
+        logger.error('Failed to parse Gemini response as JSON:', text);
+        // 텍스트에서 직접 추출 시도
+        const dateTimeMatches = text.matchAll(/(\d{4}-\d{2}-\d{2}).*?(\d{2}:\d{2}).*?(\d{2}:\d{2})/g);
+        for (const match of dateTimeMatches) {
+          parsedSlots.push({
+            date: match[1],
+            startTime: match[2],
+            endTime: match[3],
+          });
+        }
+      }
+
+      // 유효성 검증
+      const validSlots = parsedSlots.filter(slot => 
+        slot.date && 
+        slot.startTime && 
+        slot.endTime &&
+        /^\d{4}-\d{2}-\d{2}$/.test(slot.date) &&
+        /^\d{2}:\d{2}$/.test(slot.startTime) &&
+        /^\d{2}:\d{2}$/.test(slot.endTime)
+      );
+
+      // 중복 제거 및 정렬
+      const uniqueSlots = Array.from(
+        new Map(validSlots.map(s => [`${s.date}-${s.startTime}-${s.endTime}`, s])).values()
+      );
+
+      uniqueSlots.sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return a.startTime.localeCompare(b.startTime);
+      });
+
+      logger.info(`✅ Gemini AI found ${uniqueSlots.length} common slots`);
+
+      return {
+        success: true,
+        commonSlots: uniqueSlots,
+      };
+    } catch (error: any) {
+      logger.error('❌ Gemini AI analysis error:', error);
+      return {
+        success: false,
+        commonSlots: [],
+        error: error.message || 'Unknown error occurred',
+      };
+    }
+  }
+
+  /**
+   * Gemini AI 사용 가능 여부 확인
+   */
+  isGeminiAvailable(): boolean {
+    return this.isAvailable;
+  }
+}
+
+export const geminiService = new GeminiService();

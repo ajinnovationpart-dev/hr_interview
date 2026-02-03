@@ -1,0 +1,7 @@
+version: "2"
+authtoken: 38x4u9tBCiNkPolSf5HRaW6WoAG_2FL234EbsisVzKyiTKsW6
+tunnels:
+  # Backend 서버 (포트 3000)
+  tunnel-3000:
+    addr: 3000
+    proto: http
