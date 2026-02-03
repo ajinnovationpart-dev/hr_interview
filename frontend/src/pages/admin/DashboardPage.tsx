@@ -11,6 +11,11 @@ interface DashboardStats {
   partial: number
   confirmed: number
   noCommon: number
+  scheduled?: number
+  inProgress?: number
+  completed?: number
+  cancelled?: number
+  noShow?: number
 }
 
 interface RecentInterview {

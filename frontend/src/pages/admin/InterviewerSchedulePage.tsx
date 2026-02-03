@@ -131,7 +131,7 @@ export function InterviewerSchedulePage() {
     const listData = getListData(value);
     return (
       <ul className="events">
-        {listData.map((item, index) => (
+        {listData.map((item: { type: string; content: string }, index: number) => (
           <li key={index}>
             <Badge status={item.type as any} text={item.content} />
           </li>
@@ -158,9 +158,10 @@ export function InterviewerSchedulePage() {
               value={interviewerId}
               onChange={setInterviewerId}
               showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
+              filterOption={(input, option) => {
+                const label = typeof option?.label === 'string' ? option.label : String(option?.label ?? '')
+                return label.toLowerCase().includes(input.toLowerCase())
+              }}
               options={interviewers?.map((iv: any) => ({
                 label: `${iv.name} (${iv.email})`,
                 value: iv.interviewer_id,

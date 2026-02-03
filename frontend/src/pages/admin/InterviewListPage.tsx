@@ -205,9 +205,10 @@ export function InterviewListPage() {
                   value={interviewerFilter}
                   onChange={setInterviewerFilter}
                   showSearch
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
+                  filterOption={(input, option) => {
+                    const label = typeof option?.label === 'string' ? option.label : String(option?.label ?? '')
+                    return label.toLowerCase().includes(input.toLowerCase())
+                  }}
                   options={interviewers?.map((iv: any) => ({
                     label: `${iv.name} (${iv.email})`,
                     value: iv.interviewer_id,

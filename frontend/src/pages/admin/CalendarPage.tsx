@@ -119,9 +119,10 @@ export function CalendarPage() {
                 value={interviewerId}
                 onChange={setInterviewerId}
                 showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={(input, option) => {
+                  const label = typeof option?.label === 'string' ? option.label : String(option?.label ?? '')
+                  return label.toLowerCase().includes(input.toLowerCase())
+                }}
                 options={interviewers?.map((iv: any) => ({
                   label: iv.name,
                   value: iv.interviewer_id,
