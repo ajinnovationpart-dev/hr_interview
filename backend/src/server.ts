@@ -20,6 +20,7 @@ import { batchRouter } from './routes/batch.routes';
 import { candidatesRouter } from './routes/candidates.routes';
 import { exportRouter } from './routes/export.routes';
 import { schedulerService } from './services/scheduler.service';
+import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 
 // 데이터 저장소 선택 (환경 변수로 제어)
 const useSharePoint = process.env.SHAREPOINT_ENABLED === 'true';
@@ -124,6 +125,45 @@ app.use('/api/batch', batchRouter);
 app.use('/api/candidates', candidatesRouter);
 app.use('/api/export', exportRouter);
 app.use('/api', testEmailRouter); // 테스트 메일 라우트
+
+// A Backend 프록시 설정 (선택사항)
+if (process.env.A_BACKEND_ENABLED === 'true') {
+  const aBackendUrl = process.env.A_BACKEND_URL || 'http://localhost:3000';
+  
+  const proxyOptions: Options = {
+    target: aBackendUrl,
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api/a': '/api', // /api/a/* → http://localhost:3000/api/*
+    },
+    onProxyReq: (proxyReq, req, res) => {
+      // 원본 요청의 헤더 전달
+      if (req.headers.authorization) {
+        proxyReq.setHeader('Authorization', req.headers.authorization);
+      }
+      
+      logger.info(`[A Backend Proxy] ${req.method} ${req.url} → ${aBackendUrl}${req.url.replace('/api/a', '/api')}`);
+    },
+    onProxyRes: (proxyRes, req, res) => {
+      logger.debug(`[A Backend Proxy] Response: ${proxyRes.statusCode} for ${req.url}`);
+    },
+    onError: (err, req, res) => {
+      logger.error(`[A Backend Proxy] Error: ${err.message} for ${req.url}`);
+      if (!res.headersSent) {
+        res.status(502).json({
+          success: false,
+          message: 'A backend 서버에 연결할 수 없습니다',
+          error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+        });
+      }
+    },
+  };
+  
+  app.use('/api/a', createProxyMiddleware(proxyOptions));
+  logger.info(`✅ A Backend proxy enabled: /api/a → ${aBackendUrl}/api`);
+} else {
+  logger.info('ℹ️ A Backend proxy disabled (A_BACKEND_ENABLED=false or not set)');
+}
 
 // Error handler
 app.use(errorHandler);
