@@ -38,6 +38,9 @@ const PORT = process.env.PORT || 3000;
 // Security middleware
 app.use(helmet());
 
+// OPTIONS 요청을 먼저 처리 (CORS preflight)
+app.options('*', cors());
+
 // CORS 설정 (개발 환경에서는 모든 origin 허용)
 const allowedOrigins = process.env.FRONTEND_URL 
   ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
@@ -56,9 +59,10 @@ app.use(cors({
       return;
     }
     
-    // GitHub Pages 허용
-    if (origin === 'https://ajinnovationpart-dev.github.io' || origin.startsWith('https://ajinnovationpart-dev.github.io')) {
-      logger.info(`✅ CORS allowed: ${origin}`);
+    // GitHub Pages 허용 (정확한 매칭 및 하위 경로 포함)
+    if (origin === 'https://ajinnovationpart-dev.github.io' || 
+        origin.startsWith('https://ajinnovationpart-dev.github.io/')) {
+      logger.info(`✅ CORS allowed (GitHub Pages): ${origin}`);
       callback(null, true);
       return;
     }
@@ -77,8 +81,8 @@ app.use(cors({
       return;
     }
     
-    // 개발 환경에서는 모든 origin 허용
-    if (process.env.NODE_ENV === 'development') {
+    // 개발 환경에서는 모든 origin 허용 (NODE_ENV가 없어도 허용)
+    if (process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) {
       logger.info(`✅ CORS allowed (dev mode): ${origin}`);
       callback(null, true);
       return;
