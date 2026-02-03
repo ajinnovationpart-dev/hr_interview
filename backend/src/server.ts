@@ -57,7 +57,7 @@ app.use(cors({
     }
     
     // GitHub Pages 허용
-    if (origin === 'https://ajinnovationpart-dev.github.io') {
+    if (origin === 'https://ajinnovationpart-dev.github.io' || origin.startsWith('https://ajinnovationpart-dev.github.io')) {
       logger.info(`✅ CORS allowed: ${origin}`);
       callback(null, true);
       return;
@@ -88,7 +88,7 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning'],
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   preflightContinue: false,
