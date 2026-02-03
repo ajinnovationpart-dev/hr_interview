@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Form, Input, Button, Card, message } from 'antd'
-import { api } from '../utils/api'
+import { apiA } from '../utils/apiA'
 import { useAuthStore } from '../stores/authStore'
 
 function AuthLoginPage() {
@@ -12,7 +12,7 @@ function AuthLoginPage() {
   const handleSubmit = async (values: { email: string; password: string }) => {
     setLoading(true)
     try {
-      const response = await api.post('/auth/login', values)
+      const response = await apiA.post('/auth/login', values)
       const { accessToken, user } = response.data.data
       
       setAuth(accessToken, {

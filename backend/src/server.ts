@@ -45,6 +45,7 @@ const allowedOrigins = process.env.FRONTEND_URL
       'http://localhost:5173', 
       'http://192.10.10.76:5173',
       'https://ajinnovationpart-dev.github.io', // GitHub Pages
+      'https://uncognizant-restrainedly-leila.ngrok-free.dev', // ngrok URL
     ];
 
 app.use(cors({
