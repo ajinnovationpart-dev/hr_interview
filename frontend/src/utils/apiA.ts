@@ -50,12 +50,15 @@ export const apiA = axios.create({
   baseURL: API_A_URL,
   headers: {
     'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true', // ngrok 브라우저 경고 페이지 건너뛰기
+    'ngrok-skip-browser-warning': '1', // ngrok 브라우저 경고 페이지 건너뛰기
   },
 })
 
-// Request interceptor: 로그 추가
+// Request interceptor: 로그 추가 및 ngrok 헤더 확실히 추가
 apiA.interceptors.request.use((config) => {
+  // ngrok 인터스티셜 건너뛰기 헤더 확실히 추가
+  config.headers['ngrok-skip-browser-warning'] = '1'
+  
   console.log('📤 A Backend API Request:', {
     method: config.method?.toUpperCase(),
     url: config.url,
