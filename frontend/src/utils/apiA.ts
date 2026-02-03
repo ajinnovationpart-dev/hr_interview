@@ -8,19 +8,27 @@ const getABackendApiUrl = () => {
     let apiUrl = import.meta.env.VITE_API_URL
     // URL이 /로 끝나면 제거
     apiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl
+    // /api/a가 이미 포함되어 있으면 그대로 사용
+    if (apiUrl.endsWith('/api/a')) {
+      return apiUrl
+    }
+    // /api가 포함되어 있으면 제거
+    if (apiUrl.endsWith('/api')) {
+      apiUrl = apiUrl.slice(0, -4)
+    }
     // /api/a 추가
     return `${apiUrl}/api/a`
   }
   
-  // 개발 환경: localhost가 아니면 같은 IP의 3000 포트 사용
+  // 개발 환경: localhost가 아니면 같은 IP의 3030 포트 사용 (B Backend)
   // (브라우저의 Private Network Access 정책 때문에 localhost와 다른 IP 간 요청이 차단됨)
   const hostname = window.location.hostname
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:3000/api/a`
+    return `http://${hostname}:3030/api/a`
   }
   
-  // localhost인 경우
-  return 'http://localhost:3000/api/a'
+  // localhost인 경우 (B Backend 포트 3030)
+  return 'http://localhost:3030/api/a'
 }
 
 const API_A_URL = getABackendApiUrl()
