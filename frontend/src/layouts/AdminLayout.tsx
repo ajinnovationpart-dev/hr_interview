@@ -3,6 +3,7 @@ import { Layout, Menu, Button } from 'antd'
 import {
   DashboardOutlined,
   PlusOutlined,
+  UnorderedListOutlined,
   UserOutlined,
   LogoutOutlined,
   SettingOutlined,
@@ -26,6 +27,11 @@ export function AdminLayout() {
       key: '/admin/dashboard',
       icon: <DashboardOutlined />,
       label: '대시보드',
+    },
+    {
+      key: '/admin/interviews',
+      icon: <UnorderedListOutlined />,
+      label: '면접 목록',
     },
     {
       key: '/admin/interviews/new',
@@ -91,7 +97,11 @@ export function AdminLayout() {
         <Sider width={200} style={{ background: '#fff' }}>
           <Menu
             mode="inline"
-            selectedKeys={[location.pathname]}
+            selectedKeys={[
+              location.pathname.startsWith('/admin/interviews/') && location.pathname !== '/admin/interviews/new'
+                ? '/admin/interviews'
+                : location.pathname
+            ]}
             items={menuItems}
             onClick={({ key }) => navigate(key)}
             style={{ height: '100%', borderRight: 0 }}

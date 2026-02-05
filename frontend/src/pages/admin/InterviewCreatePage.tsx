@@ -6,7 +6,6 @@ import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { api } from '../../utils/api'
 
 const { Text, Title } = Typography
 
@@ -139,11 +138,7 @@ export function InterviewCreatePage() {
           formData.append('candidateId', candidateId)
           
           try {
-            await api.post('/resumes/upload', formData, {
-              headers: {
-                'Content-Type': 'multipart/form-data',
-              },
-            })
+            await apiA.post('/resumes/upload', formData)
           } catch (error: any) {
             console.error(`이력서 업로드 실패 (${candidate.name}):`, error)
             message.warning(`${candidate.name}님의 이력서 업로드에 실패했습니다`)

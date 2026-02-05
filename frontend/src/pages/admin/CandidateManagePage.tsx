@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
@@ -18,6 +18,7 @@ import {
   SearchOutlined,
   UserOutlined,
 } from '@ant-design/icons';
+import { useParams, useNavigate } from 'react-router-dom';
 import { apiA } from '../../utils/apiA';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -30,6 +31,7 @@ interface Candidate {
   status: string;
   resume_url?: string;
   notes?: string;
+  portfolio_url?: string;
   created_at: string;
 }
 
@@ -52,12 +54,31 @@ const statusLabels: Record<string, string> = {
 };
 
 export function CandidateManagePage() {
+  const { id: candidateIdFromUrl } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
+
+  const { data: candidateDetail } = useQuery({
+    queryKey: ['candidate', candidateIdFromUrl],
+    queryFn: async () => {
+      const response = await apiA.get(`/candidates/${candidateIdFromUrl}`);
+      return response.data.data.candidate;
+    },
+    enabled: !!candidateIdFromUrl && window.location.pathname.endsWith('/edit'),
+  });
+
+  useEffect(() => {
+    if (candidateIdFromUrl && candidateDetail && window.location.pathname.endsWith('/edit')) {
+      setEditingCandidate(candidateDetail);
+      form.setFieldsValue(candidateDetail);
+      setIsModalOpen(true);
+    }
+  }, [candidateIdFromUrl, candidateDetail, form]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['candidates', searchText, statusFilter],
@@ -99,6 +120,9 @@ export function CandidateManagePage() {
       setIsModalOpen(false);
       form.resetFields();
       setEditingCandidate(null);
+      if (candidateIdFromUrl && window.location.pathname.endsWith('/edit')) {
+        navigate('/admin/candidates');
+      }
     },
     onError: (error: any) => {
       message.error(error.response?.data?.message || '지원자 수정에 실패했습니다');
@@ -301,6 +325,13 @@ export function CandidateManagePage() {
             name="resume_url"
           >
             <Input placeholder="https://..." />
+          </Form.Item>
+
+          <Form.Item
+            label="포트폴리오 URL"
+            name="portfolio_url"
+          >
+            <Input placeholder="https://github.com/... 또는 링크드인 등" />
           </Form.Item>
 
           <Form.Item

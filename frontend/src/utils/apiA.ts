@@ -29,15 +29,12 @@ const getABackendApiUrl = () => {
     return finalUrl
   }
   
-  // 개발 환경: localhost가 아니면 같은 IP의 3030 포트 사용 (B Backend)
-  // (브라우저의 Private Network Access 정책 때문에 localhost와 다른 IP 간 요청이 차단됨)
+  // 개발 환경: VITE_API_URL 없으면 api와 동일 백엔드(3000) 사용 → 단일 서버에서 모든 API 호출
   const hostname = window.location.hostname
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:3030/api/a`
-  }
-  
-  // localhost인 경우 (B Backend 포트 3030)
-  return 'http://localhost:3030/api/a'
+  const base = (hostname !== 'localhost' && hostname !== '127.0.0.1')
+    ? `http://${hostname}:3000`
+    : 'http://localhost:3000'
+  return `${base}/api`
 }
 
 const API_A_URL = getABackendApiUrl()
@@ -52,6 +49,14 @@ export const apiA = axios.create({
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': '1', // ngrok 브라우저 경고 페이지 건너뛰기
   },
+})
+
+// Request interceptor: FormData 시 Content-Type 제거 (multipart boundary 자동 설정)
+apiA.interceptors.request.use((config) => {
+  if (config.data && config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
+  return config
 })
 
 // Request interceptor: 로그 추가 및 ngrok 헤더 확실히 추가

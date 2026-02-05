@@ -709,6 +709,7 @@ export class OneDriveLocalService {
       status: row[6] || '',
       resume_url: row[7] || '',
       notes: row[8] || '',
+      portfolio_url: row[9] || '',
     }));
   }
 
@@ -743,6 +744,7 @@ export class OneDriveLocalService {
       if (updates.status !== undefined) row[6] = updates.status;
       if (updates.resume_url !== undefined) row[7] = updates.resume_url;
       if (updates.notes !== undefined) row[8] = updates.notes;
+      if (updates.portfolio_url !== undefined) row[9] = updates.portfolio_url;
       workbook.Sheets['candidates'] = XLSX.utils.aoa_to_sheet(rows);
       await this.saveWorkbook(true);
     } finally {
@@ -765,6 +767,7 @@ export class OneDriveLocalService {
       candidate.status || '',
       candidate.resume_url || '',
       candidate.notes || '',
+      (candidate as any).portfolio_url || '',
     ]);
   }
 

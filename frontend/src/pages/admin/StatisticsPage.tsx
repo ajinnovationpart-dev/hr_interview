@@ -195,6 +195,44 @@ export function StatisticsPage() {
               </Col>
             </Row>
 
+            {overviewData.evaluations && overviewData.evaluations.total > 0 && (
+              <Card title="면접 평가 통계" style={{ marginTop: 16 }}>
+                <Row gutter={16}>
+                  <Col span={4}>
+                    <Statistic title="총 평가 수" value={overviewData.evaluations.total} />
+                  </Col>
+                  <Col span={4}>
+                    <Statistic
+                      title="합격률"
+                      value={overviewData.evaluations.passRate}
+                      suffix="%"
+                      valueStyle={{ color: '#3f8600' }}
+                    />
+                  </Col>
+                  <Col span={4}>
+                    <Statistic title="합격" value={overviewData.evaluations.passCount} />
+                  </Col>
+                  <Col span={4}>
+                    <Statistic title="검토" value={overviewData.evaluations.considerCount} />
+                  </Col>
+                  <Col span={4}>
+                    <Statistic title="불합격" value={overviewData.evaluations.failCount} />
+                  </Col>
+                </Row>
+                <Row gutter={16} style={{ marginTop: 16 }}>
+                  <Col span={8}>
+                    <Statistic title="평균 기술 역량" value={overviewData.evaluations.avgTechnical} suffix="/ 5" />
+                  </Col>
+                  <Col span={8}>
+                    <Statistic title="평균 커뮤니케이션" value={overviewData.evaluations.avgCommunication} suffix="/ 5" />
+                  </Col>
+                  <Col span={8}>
+                    <Statistic title="평균 종합 점수" value={overviewData.evaluations.avgOverall} suffix="/ 5" />
+                  </Col>
+                </Row>
+              </Card>
+            )}
+
             <Card title="상태별 면접 통계">
               <Row gutter={16}>
                 {Object.entries(overviewData.interviews?.byStatus || {}).map(([status, count]: [string, any]) => (

@@ -72,6 +72,7 @@ function App() {
           <Route path="rooms" element={<RoomManagePage />} />
           <Route path="candidates" element={<CandidateManagePage />} />
           <Route path="candidates/:id" element={<CandidateDetailPage />} />
+          <Route path="candidates/:id/edit" element={<CandidateManagePage />} />
           <Route path="statistics" element={<StatisticsPage />} />
           <Route path="interviewer-schedule" element={<InterviewerSchedulePage />} />
           <Route path="calendar" element={<CalendarPage />} />

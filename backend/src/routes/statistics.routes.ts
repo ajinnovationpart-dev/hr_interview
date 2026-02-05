@@ -75,6 +75,35 @@ statisticsRouter.get('/overview', adminAuth, async (req: Request, res: Response)
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
     
+    // 평가 통계 (해당 기간 면접에 대한 평가만)
+    const allEvaluations: any[] = [];
+    for (const i of filteredInterviews) {
+      try {
+        const evals = await dataService.getEvaluationsByInterview(i.interview_id);
+        allEvaluations.push(...evals);
+      } catch {
+        // getEvaluationsByInterview 미구현 스토리지면 무시
+      }
+    }
+    const evaluationStats = {
+      total: allEvaluations.length,
+      passCount: allEvaluations.filter(e => e.recommendation === 'PASS').length,
+      failCount: allEvaluations.filter(e => e.recommendation === 'FAIL').length,
+      considerCount: allEvaluations.filter(e => e.recommendation === 'CONSIDER').length,
+      passRate: allEvaluations.length > 0
+        ? Math.round((allEvaluations.filter(e => e.recommendation === 'PASS').length / allEvaluations.length) * 100)
+        : 0,
+      avgTechnical: allEvaluations.length > 0
+        ? Math.round((allEvaluations.reduce((s, e) => s + (Number(e.technical_score) || 0), 0) / allEvaluations.length) * 10) / 10
+        : 0,
+      avgCommunication: allEvaluations.length > 0
+        ? Math.round((allEvaluations.reduce((s, e) => s + (Number(e.communication_score) || 0), 0) / allEvaluations.length) * 10) / 10
+        : 0,
+      avgOverall: allEvaluations.length > 0
+        ? Math.round((allEvaluations.reduce((s, e) => s + (Number(e.overall_score) || 0), 0) / allEvaluations.length) * 10) / 10
+        : 0,
+    };
+    
     // 면접실 사용률
     const roomUtilization = await Promise.all(
       rooms.map(async (room) => {
@@ -135,6 +164,7 @@ statisticsRouter.get('/overview', adminAuth, async (req: Request, res: Response)
         candidates: {
           total: candidates.length,
         },
+        evaluations: evaluationStats,
         rooms: {
           total: rooms.length,
           utilization: roomUtilization,

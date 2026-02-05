@@ -16,6 +16,7 @@ const createCandidateSchema = z.object({
   resume_url: z.string().optional(),
   status: z.enum(['applied', 'screening', 'interviewing', 'offer', 'rejected', 'withdrawn']).optional(),
   notes: z.string().optional(),
+  portfolio_url: z.string().optional().or(z.literal('')),
 });
 
 // 지원자 수정 스키마
@@ -27,6 +28,7 @@ const updateCandidateSchema = z.object({
   resume_url: z.string().optional(),
   status: z.enum(['applied', 'screening', 'interviewing', 'offer', 'rejected', 'withdrawn']).optional(),
   notes: z.string().optional(),
+  portfolio_url: z.string().optional().or(z.literal('')),
 });
 
 // 지원자 목록 조회
@@ -169,8 +171,9 @@ candidatesRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       resume_url: validated.resume_url || '',
       status: validated.status || 'applied',
       notes: validated.notes || '',
+      portfolio_url: validated.portfolio_url || '',
       created_at: new Date().toISOString(),
-    });
+    } as any);
     
     logger.info(`Candidate created: ${candidateId}`);
     

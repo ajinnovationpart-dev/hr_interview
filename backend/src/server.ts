@@ -138,6 +138,25 @@ app.use('/api/interviewer-portal', interviewerPortalRouter); // 면접관 전용
 app.use('/api/resumes', resumeRouter); // 이력서 업로드/다운로드
 app.use('/api', testEmailRouter); // 테스트 메일 라우트
 
+// /api/a/* 경로 동일 라우트 (프론트 apiA baseURL이 /api/a 일 때 단일 서버에서 동작)
+const apiAInterviewersRouter = express.Router();
+apiAInterviewersRouter.use(interviewerRouter);
+apiAInterviewersRouter.use(interviewerScheduleRouter);
+app.use('/api/a/auth', authRouter);
+app.use('/api/a/interviews', interviewRouter);
+app.use('/api/a/interviewers', apiAInterviewersRouter);
+app.use('/api/a/confirm', confirmRouter);
+app.use('/api/a/config', configRouter);
+app.use('/api/a/sharepoint', sharepointRouter);
+app.use('/api/a/rooms', roomsRouter);
+app.use('/api/a/statistics', statisticsRouter);
+app.use('/api/a/calendar', calendarRouter);
+app.use('/api/a/batch', batchRouter);
+app.use('/api/a/candidates', candidatesRouter);
+app.use('/api/a/export', exportRouter);
+app.use('/api/a/interviewer-portal', interviewerPortalRouter);
+app.use('/api/a/resumes', resumeRouter);
+
 // A Backend 프록시 설정 전에 OPTIONS 요청 처리
 app.options('/api/a/*', (req, res) => {
   const origin = req.headers.origin;

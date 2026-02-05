@@ -158,6 +158,13 @@ export function CandidateDetailPage() {
                 </a>
               </Descriptions.Item>
             )}
+            {data.candidate.portfolio_url && (
+              <Descriptions.Item label="포트폴리오">
+                <a href={data.candidate.portfolio_url} target="_blank" rel="noopener noreferrer">
+                  포트폴리오 보기
+                </a>
+              </Descriptions.Item>
+            )}
             {data.candidate.notes && (
               <Descriptions.Item label="비고" span={2}>
                 {data.candidate.notes}

@@ -19,7 +19,6 @@ import {
 } from 'antd'
 import { DownloadOutlined, EyeOutlined, FormOutlined } from '@ant-design/icons'
 import { apiA } from '../../utils/apiA'
-import { api } from '../../utils/api'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
@@ -130,7 +129,7 @@ export function InterviewerPortalPage() {
     }
 
     // 이력서 다운로드 URL: baseURL이 .../api 이므로 resume_url(/api/resumes/xxx)과 합치면 /api 중복 방지
-    const base = (api.defaults.baseURL || '').replace(/\/api\/?$/, '') || api.defaults.baseURL
+    const base = (apiA.defaults.baseURL || '').replace(/\/api\/?$/, '') || apiA.defaults.baseURL
     const path = candidate.resume_url.startsWith('/') ? candidate.resume_url : `/api/resumes/${candidate.resume_url}`
     const resumeUrl = `${base}${path}`
 
@@ -357,8 +356,8 @@ export function InterviewerPortalPage() {
                 ]}
               />
             </Form.Item>
-            <Form.Item name="comments" label="평가 코멘트">
-              <TextArea rows={3} placeholder="종합 의견을 입력하세요" />
+            <Form.Item name="comments" label="평가 코멘트 / 면접 노트">
+              <TextArea rows={3} placeholder="종합 의견·면접 중 메모·후속 조치 사항을 입력하세요" />
             </Form.Item>
             <Form.Item name="strengths" label="강점 (쉼표로 구분)">
               <Input placeholder="예: 기술력, 소통 능력" />
