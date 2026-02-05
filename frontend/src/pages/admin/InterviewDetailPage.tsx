@@ -274,7 +274,7 @@ export function InterviewDetailPage() {
                     {
                       title: '면접관',
                       key: 'interviewer_id',
-                      render: (_, ev) => {
+                      render: (_: unknown, ev: { interviewer_id?: string }) => {
                         const r = data?.responseStatus?.find((s: any) => s.interviewerId === ev.interviewer_id)
                         return r?.name || ev.interviewer_id
                       },

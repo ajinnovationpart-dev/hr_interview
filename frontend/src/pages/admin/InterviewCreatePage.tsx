@@ -1,7 +1,7 @@
 import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
-import { PlusOutlined, MinusCircleOutlined, UploadOutlined, FileTextOutlined } from '@ant-design/icons'
+import { PlusOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
 import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
