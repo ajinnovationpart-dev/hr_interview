@@ -4,7 +4,7 @@ import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
 import type { SelectProps } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 
 const { Text, Title } = Typography
 
@@ -15,7 +15,7 @@ export function InterviewCreatePage() {
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
     queryFn: async () => {
-      const response = await api.get('/interviewers')
+      const response = await apiA.get('/interviewers')
       return response.data.data
     },
   })
@@ -90,7 +90,7 @@ export function InterviewCreatePage() {
     queryKey: ['config'],
     queryFn: async () => {
       try {
-        const response = await api.get('/config')
+        const response = await apiA.get('/config')
         return response.data.data
       } catch (error) {
         // Config가 없어도 기본값 사용
@@ -108,7 +108,7 @@ export function InterviewCreatePage() {
 
   const mutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/interviews', data)
+      const response = await apiA.post('/interviews', data)
       return response.data
     },
     onSuccess: (data) => {

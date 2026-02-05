@@ -19,7 +19,7 @@ import {
   DownloadOutlined,
   BarChartOutlined,
 } from '@ant-design/icons';
-import { api } from '../../utils/api';
+import { apiA } from '../../utils/apiA';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -40,7 +40,7 @@ export function StatisticsPage() {
       if (dateRange[1]) params.append('endDate', dateRange[1].format('YYYY-MM-DD'));
       if (department) params.append('department', department);
       
-      const response = await api.get(`/statistics/overview?${params.toString()}`);
+      const response = await apiA.get(`/statistics/overview?${params.toString()}`);
       return response.data.data;
     },
   });
@@ -52,7 +52,7 @@ export function StatisticsPage() {
       if (dateRange[0]) params.append('startDate', dateRange[0].format('YYYY-MM-DD'));
       if (dateRange[1]) params.append('endDate', dateRange[1].format('YYYY-MM-DD'));
       
-      const response = await api.get(`/statistics/rooms?${params.toString()}`);
+      const response = await apiA.get(`/statistics/rooms?${params.toString()}`);
       return response.data.data;
     },
     enabled: !!dateRange[0] && !!dateRange[1],
@@ -66,7 +66,7 @@ export function StatisticsPage() {
       params.append('format', 'xlsx');
       params.append('includeDetails', 'true');
       
-      const response = await api.get(`/export/interviews?${params.toString()}`, {
+      const response = await apiA.get(`/export/interviews?${params.toString()}`, {
         responseType: 'blob',
       });
       

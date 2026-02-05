@@ -11,7 +11,7 @@ import {
   Spin,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
-import { api } from '../../utils/api';
+import { apiA } from '../../utils/apiA';
 import type { ColumnsType } from 'antd/es/table';
 
 const statusColors: Record<string, string> = {
@@ -39,7 +39,7 @@ export function CandidateDetailPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['candidate', id],
     queryFn: async () => {
-      const response = await api.get(`/candidates/${id}`);
+      const response = await apiA.get(`/candidates/${id}`);
       return response.data.data;
     },
   });

@@ -12,7 +12,7 @@ import {
   Descriptions,
 } from 'antd';
 import { CalendarOutlined, WarningOutlined } from '@ant-design/icons';
-import { api } from '../../utils/api';
+import { apiA } from '../../utils/apiA';
 import dayjs, { Dayjs } from 'dayjs';
 import type { CalendarProps } from 'antd';
 
@@ -29,7 +29,7 @@ export function CalendarPage() {
   const { data: rooms } = useQuery({
     queryKey: ['rooms'],
     queryFn: async () => {
-      const response = await api.get('/rooms');
+      const response = await apiA.get('/rooms');
       return response.data.data;
     },
   });
@@ -37,7 +37,7 @@ export function CalendarPage() {
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
     queryFn: async () => {
-      const response = await api.get('/interviewers');
+      const response = await apiA.get('/interviewers');
       return response.data.data;
     },
   });
@@ -52,7 +52,7 @@ export function CalendarPage() {
       if (interviewerId) params.append('interviewerId', interviewerId);
       if (roomId) params.append('roomId', roomId);
       
-      const response = await api.get(`/calendar/interviews?${params.toString()}`);
+      const response = await apiA.get(`/calendar/interviews?${params.toString()}`);
       return response.data.data;
     },
     enabled: !!dateRange[0] && !!dateRange[1],

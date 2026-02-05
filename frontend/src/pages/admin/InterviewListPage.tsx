@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, Table, Button, Tag, Space, Input, Select, DatePicker } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 import type { ColumnsType } from 'antd/es/table'
 
 const { RangePicker } = DatePicker
@@ -56,7 +56,7 @@ export function InterviewListPage() {
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
     queryFn: async () => {
-      const response = await api.get('/interviewers')
+      const response = await apiA.get('/interviewers')
       return response.data.data
     },
   })
@@ -64,7 +64,7 @@ export function InterviewListPage() {
   const { data: rooms } = useQuery({
     queryKey: ['rooms'],
     queryFn: async () => {
-      const response = await api.get('/rooms')
+      const response = await apiA.get('/rooms')
       return response.data.data
     },
   })
@@ -84,7 +84,7 @@ export function InterviewListPage() {
       params.append('page', '1')
       params.append('limit', '100')
       
-      const response = await api.get(`/interviews/search?${params.toString()}`)
+      const response = await apiA.get(`/interviews/search?${params.toString()}`)
       return response.data.data
     },
   })

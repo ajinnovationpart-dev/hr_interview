@@ -18,7 +18,7 @@ import {
   SearchOutlined,
   UserOutlined,
 } from '@ant-design/icons';
-import { api } from '../../utils/api';
+import { apiA } from '../../utils/apiA';
 import type { ColumnsType } from 'antd/es/table';
 
 interface Candidate {
@@ -66,14 +66,14 @@ export function CandidateManagePage() {
       if (searchText) params.append('search', searchText);
       if (statusFilter) params.append('status', statusFilter);
       
-      const response = await api.get(`/candidates?${params.toString()}`);
+      const response = await apiA.get(`/candidates?${params.toString()}`);
       return response.data.data.candidates;
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (values: any) => {
-      const response = await api.post('/candidates', values);
+      const response = await apiA.post('/candidates', values);
       return response.data;
     },
     onSuccess: () => {
@@ -90,7 +90,7 @@ export function CandidateManagePage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await api.put(`/candidates/${id}`, data);
+      const response = await apiA.put(`/candidates/${id}`, data);
       return response.data;
     },
     onSuccess: () => {

@@ -19,7 +19,7 @@ import {
   EditOutlined,
   DeleteOutlined,
 } from '@ant-design/icons';
-import { api } from '../../utils/api';
+import { apiA } from '../../utils/apiA';
 import type { ColumnsType } from 'antd/es/table';
 
 interface Room {
@@ -41,14 +41,14 @@ export function RoomManagePage() {
   const { data: rooms, isLoading } = useQuery({
     queryKey: ['rooms'],
     queryFn: async () => {
-      const response = await api.get('/rooms');
+      const response = await apiA.get('/rooms');
       return response.data.data;
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/rooms', data);
+      const response = await apiA.post('/rooms', data);
       return response.data;
     },
     onSuccess: () => {
@@ -65,7 +65,7 @@ export function RoomManagePage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await api.put(`/rooms/${id}`, data);
+      const response = await apiA.put(`/rooms/${id}`, data);
       return response.data;
     },
     onSuccess: () => {
@@ -82,7 +82,7 @@ export function RoomManagePage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await api.delete(`/rooms/${id}`);
+      const response = await apiA.delete(`/rooms/${id}`);
       return response.data;
     },
     onSuccess: () => {

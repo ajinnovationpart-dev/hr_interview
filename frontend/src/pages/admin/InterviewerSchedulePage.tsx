@@ -12,7 +12,7 @@ import {
   Empty,
 } from 'antd';
 import { UserOutlined, CalendarOutlined } from '@ant-design/icons';
-import { api } from '../../utils/api';
+import { apiA } from '../../utils/apiA';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import type { CalendarProps } from 'antd';
@@ -30,7 +30,7 @@ export function InterviewerSchedulePage() {
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
     queryFn: async () => {
-      const response = await api.get('/interviewers');
+      const response = await apiA.get('/interviewers');
       return response.data.data;
     },
   });
@@ -45,7 +45,7 @@ export function InterviewerSchedulePage() {
       if (dateRange[0]) params.append('startDate', dateRange[0].format('YYYY-MM-DD'));
       if (dateRange[1]) params.append('endDate', dateRange[1].format('YYYY-MM-DD'));
       
-      const response = await api.get(`/interviewers/${interviewerId}/schedule?${params.toString()}`);
+      const response = await apiA.get(`/interviewers/${interviewerId}/schedule?${params.toString()}`);
       return response.data.data;
     },
     enabled: !!interviewerId,

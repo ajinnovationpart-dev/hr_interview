@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Modal, Form, DatePicker, TimePicker, Input, Select } from 'antd'
 import { ArrowLeftOutlined, ThunderboltOutlined, CheckCircleOutlined, CopyOutlined, DeleteOutlined, BellOutlined, EditOutlined, CloseCircleOutlined, CheckCircleFilled } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 import type { ColumnsType } from 'antd/es/table'
 
 const statusColors: Record<string, string> = {
@@ -47,7 +47,7 @@ export function InterviewDetailPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['interview', id],
     queryFn: async () => {
-      const response = await api.get(`/interviews/${id}`)
+      const response = await apiA.get(`/interviews/${id}`)
       return response.data.data
     },
   })
@@ -55,7 +55,7 @@ export function InterviewDetailPage() {
   // AI 분석 mutation
   const analyzeMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.post(`/interviews/${id}/analyze`)
+      const response = await apiA.post(`/interviews/${id}/analyze`)
       return response.data
     },
     onSuccess: (result) => {
@@ -71,7 +71,7 @@ export function InterviewDetailPage() {
   // 리마인더 발송 mutation
   const remindMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.post(`/interviews/${id}/remind`)
+      const response = await apiA.post(`/interviews/${id}/remind`)
       return response.data
     },
     onSuccess: (result) => {
@@ -86,7 +86,7 @@ export function InterviewDetailPage() {
   // 면접 삭제 mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      const response = await api.delete(`/interviews/${id}`)
+      const response = await apiA.delete(`/interviews/${id}`)
       return response.data
     },
     onSuccess: () => {
@@ -101,7 +101,7 @@ export function InterviewDetailPage() {
   // 포털 링크 복사
   const copyPortalLink = async (interviewerId: string) => {
     try {
-      const response = await api.get(`/interviews/${id}/portal-link/${interviewerId}`)
+      const response = await apiA.get(`/interviews/${id}/portal-link/${interviewerId}`)
       const link = response.data.data.portalLink
       
       await navigator.clipboard.writeText(link)
@@ -407,7 +407,7 @@ export function InterviewDetailPage() {
         onOk={async () => {
           try {
             const values = await editForm.validateFields()
-            await api.put(`/interviews/${id}/schedule`, {
+            await apiA.put(`/interviews/${id}/schedule`, {
               interviewDate: values.interviewDate.format('YYYY-MM-DD'),
               startTime: values.startTime.format('HH:mm'),
               duration: values.duration,
@@ -461,7 +461,7 @@ export function InterviewDetailPage() {
         onOk={async () => {
           try {
             const values = await cancelForm.validateFields()
-            await api.post(`/interviews/${id}/cancel`, {
+            await apiA.post(`/interviews/${id}/cancel`, {
               reason: values.reason,
               notifyAll: true,
             })
@@ -501,7 +501,7 @@ export function InterviewDetailPage() {
         onOk={async () => {
           try {
             const values = await completeForm.validateFields()
-            await api.post(`/interviews/${id}/complete`, {
+            await apiA.post(`/interviews/${id}/complete`, {
               notes: values.notes,
               actualDuration: values.actualDuration,
             })
@@ -545,7 +545,7 @@ export function InterviewDetailPage() {
         onOk={async () => {
           try {
             const values = await noShowForm.validateFields()
-            await api.post(`/interviews/${id}/no-show`, {
+            await apiA.post(`/interviews/${id}/no-show`, {
               noShowType: values.noShowType,
               reason: values.reason,
               interviewerId: values.interviewerId,
