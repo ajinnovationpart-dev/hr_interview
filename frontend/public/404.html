@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>HR Interview System</title>
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
+      // https://github.com/rafgraph/spa-github-pages
+      // This script takes the current url and converts the path and query
+      // string into just a query string, and then redirects the browser to the
+      // new url with only a query string and hash fragment,
+      // e.g., https://www.foo.com/path/to/page?query=string#hash
+      // becomes:
+      // https://www.foo.com/?/path/to/page&query=string#hash
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) { 
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          window.history.replaceState(null, null,
+              l.pathname.slice(0, -1) + decoded + l.hash
+          );
+        }
+      }(window.location))
+    </script>
+  </head>
+  <body>
+    <script>
+      // GitHub Pages 404.html - 모든 요청을 index.html로 리다이렉트
+      var path = window.location.pathname;
+      var search = window.location.search;
+      var hash = window.location.hash;
+      
+      // /hr_interview/로 시작하는 경로 처리
+      if (path.startsWith('/hr_interview/')) {
+        // 이미 /hr_interview/로 시작하면 그대로 index.html로 리다이렉트
+        var redirectPath = '/hr_interview/';
+        // 쿼리 파라미터로 경로 전달 (spa-github-pages 방식)
+        var pathWithoutPrefix = path.replace('/hr_interview', '');
+        var query = pathWithoutPrefix !== '/' ? '?/' + pathWithoutPrefix.slice(1) : '';
+        if (search) {
+          query += (query ? '&' : '?') + search.slice(1);
+        }
+        query += hash;
+        window.location.replace(redirectPath + query);
+      } else {
+        // /hr_interview/로 시작하지 않으면 /hr_interview/로 리다이렉트
+        window.location.replace('/hr_interview/' + (path !== '/' ? '?/' + path.slice(1) : '') + search + hash);
+      }
+    </script>
+  </body>
+</html>

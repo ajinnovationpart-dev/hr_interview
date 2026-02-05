@@ -34,6 +34,20 @@ function App() {
     }
   }, [isDev])
   
+  // 프로덕션 환경에서 쿼리 파라미터로 전달된 경로 처리 (404.html에서 리다이렉트된 경우)
+  React.useEffect(() => {
+    if (!isDev && window.location.search) {
+      const searchParams = new URLSearchParams(window.location.search)
+      const pathParam = searchParams.get('/')
+      if (pathParam) {
+        // 쿼리 파라미터에서 경로 추출하여 리다이렉트
+        const newPath = '/hr_interview' + (pathParam.startsWith('/') ? pathParam : '/' + pathParam)
+        window.history.replaceState({}, '', newPath)
+        window.location.reload()
+      }
+    }
+  }, [isDev])
+  
   // 디버깅: basename 로그 출력
   if (import.meta.env.DEV) {
     console.log('🔧 App basename:', basename, 'isDev:', isDev, 'MODE:', import.meta.env.MODE, 'pathname:', window.location.pathname)
