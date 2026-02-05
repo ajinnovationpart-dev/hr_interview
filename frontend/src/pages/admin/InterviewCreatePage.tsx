@@ -1,16 +1,19 @@
+import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag } from 'antd'
-import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
-import type { SelectProps } from 'antd'
+import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
+import { PlusOutlined, MinusCircleOutlined, UploadOutlined, FileTextOutlined } from '@ant-design/icons'
+import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
+import { api } from '../../utils/api'
 
 const { Text, Title } = Typography
 
 export function InterviewCreatePage() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
+  const [resumeFiles, setResumeFiles] = React.useState<Record<number, UploadFile[]>>({})
 
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
@@ -111,7 +114,45 @@ export function InterviewCreatePage() {
       const response = await apiA.post('/interviews', data)
       return response.data
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      // 면접 생성 후 이력서 업로드
+      const candidates = form.getFieldValue('candidates') || []
+      const interviewData = data.data
+      
+      // 각 면접자에 대해 이력서 업로드
+      const uploadPromises = candidates.map(async (candidate: any, index: number) => {
+        const files = resumeFiles[index]
+        if (!files || files.length === 0) return
+        
+        // candidateId 찾기 (면접 생성 응답에서)
+        const candidateId = interviewData.candidates?.[index]?.candidateId || 
+                           interviewData.candidateSchedules?.[index]?.candidateId
+        if (!candidateId) {
+          console.warn(`Candidate ID not found for candidate at index ${index}`)
+          return
+        }
+        
+        const file = files[0]
+        if (file.originFileObj) {
+          const formData = new FormData()
+          formData.append('resume', file.originFileObj)
+          formData.append('candidateId', candidateId)
+          
+          try {
+            await api.post('/resumes/upload', formData, {
+              headers: {
+                'Content-Type': 'multipart/form-data',
+              },
+            })
+          } catch (error: any) {
+            console.error(`이력서 업로드 실패 (${candidate.name}):`, error)
+            message.warning(`${candidate.name}님의 이력서 업로드에 실패했습니다`)
+          }
+        }
+      })
+      
+      await Promise.all(uploadPromises)
+      
       message.success(`면접이 등록되었습니다. ${data.data.emailsSent}명에게 메일이 발송되었습니다.`)
       navigate('/admin/dashboard')
     },
@@ -313,6 +354,37 @@ export function InterviewCreatePage() {
                     rules={[{ required: true, message: '지원 직무를 입력해주세요' }]}
                   >
                     <Input placeholder="선임 개발자" />
+                  </Form.Item>
+
+                  <Form.Item
+                    key={`${field.key}-resume`}
+                    label="이력서 (선택)"
+                    name={[field.name, 'resume']}
+                  >
+                    <Upload
+                      beforeUpload={() => false} // 자동 업로드 방지
+                      maxCount={1}
+                      accept=".pdf,.doc,.docx,.hwp,.txt"
+                      fileList={resumeFiles[field.name] || []}
+                      onChange={({ fileList }) => {
+                        setResumeFiles(prev => ({
+                          ...prev,
+                          [field.name]: fileList,
+                        }))
+                      }}
+                      onRemove={() => {
+                        setResumeFiles(prev => {
+                          const newFiles = { ...prev }
+                          delete newFiles[field.name]
+                          return newFiles
+                        })
+                      }}
+                    >
+                      <Button icon={<UploadOutlined />}>이력서 선택</Button>
+                    </Upload>
+                    <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                      지원 형식: PDF, DOC, DOCX, HWP, TXT (최대 10MB)
+                    </Text>
                   </Form.Item>
 
                   <Form.Item

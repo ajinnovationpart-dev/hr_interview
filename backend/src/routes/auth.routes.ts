@@ -90,6 +90,73 @@ authRouter.post('/login', async (req: Request, res: Response) => {
   }
 });
 
+// 면접관 로그인
+authRouter.post('/interviewer/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      throw new AppError(400, '이메일과 비밀번호를 입력해주세요');
+    }
+
+    // 면접관 조회 (비밀번호 해시 포함)
+    const interviewer = await dataService.getInterviewerByEmailWithPassword(email.toLowerCase());
+    
+    if (!interviewer) {
+      logger.warn(`❌ Interviewer not found: ${email}`);
+      throw new AppError(401, '이메일 또는 비밀번호가 일치하지 않습니다');
+    }
+
+    // 비활성화된 면접관 확인
+    if (!interviewer.is_active) {
+      logger.warn(`❌ Inactive interviewer login attempt: ${email}`);
+      throw new AppError(403, '비활성화된 계정입니다. 관리자에게 문의하세요');
+    }
+
+    // 비밀번호 확인
+    if (!interviewer.password_hash) {
+      logger.warn(`❌ No password set for interviewer: ${email}`);
+      throw new AppError(401, '비밀번호가 설정되지 않았습니다. 관리자에게 문의하세요');
+    }
+
+    const isValidPassword = await verifyPassword(password, interviewer.password_hash);
+    
+    if (!isValidPassword) {
+      logger.warn(`❌ Invalid password for interviewer: ${email}`);
+      throw new AppError(401, '이메일 또는 비밀번호가 일치하지 않습니다');
+    }
+
+    logger.info(`✅ Interviewer login successful: ${email}`);
+
+    const accessToken = generateJWT({
+      email: interviewer.email.toLowerCase(),
+      role: 'INTERVIEWER',
+      interviewerId: interviewer.interviewer_id,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        accessToken,
+        user: {
+          interviewer_id: interviewer.interviewer_id,
+          email: interviewer.email,
+          name: interviewer.name,
+          department: interviewer.department,
+          position: interviewer.position,
+          role: 'INTERVIEWER',
+        },
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error in interviewer login:', error);
+    throw new AppError(500, '로그인 실패');
+  }
+});
+
 // 현재 사용자 정보 조회
 authRouter.get('/me', adminAuth, async (req: Request, res: Response) => {
   res.json({

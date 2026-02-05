@@ -5,6 +5,7 @@ import { adminAuth } from '../middlewares/auth.middleware';
 import { AppError } from '../middlewares/errorHandler';
 import { dataService } from '../services/dataService';
 import { logger } from '../utils/logger';
+import { hashPassword, generateTemporaryPassword } from '../utils/password';
 
 export const interviewerRouter = Router();
 
@@ -88,7 +89,7 @@ interviewerRouter.get('/debug/:name', adminAuth, async (req: Request, res: Respo
 // 면접관 등록
 interviewerRouter.post('/', adminAuth, async (req: Request, res: Response) => {
   try {
-    const { name, email, department, position, phone, is_team_lead, is_active } = req.body;
+    const { name, email, department, position, phone, is_team_lead, is_active, password, generatePassword } = req.body;
 
     if (!name || !email) {
       throw new AppError(400, '이름과 이메일은 필수입니다');
@@ -98,6 +99,25 @@ interviewerRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     const existing = await dataService.getInterviewerByEmail(email);
     if (existing) {
       throw new AppError(400, '이미 등록된 이메일입니다');
+    }
+
+    // 비밀번호 처리
+    let passwordHash = '';
+    let tempPassword = '';
+    if (generatePassword !== false) {
+      // 임시 비밀번호 생성 (기본값)
+      tempPassword = generateTemporaryPassword();
+      passwordHash = await hashPassword(tempPassword);
+    } else if (password) {
+      // 사용자 지정 비밀번호
+      if (password.length < 6) {
+        throw new AppError(400, '비밀번호는 최소 6자 이상이어야 합니다');
+      }
+      passwordHash = await hashPassword(password);
+    } else {
+      // 비밀번호 없이 생성 (나중에 설정 가능)
+      tempPassword = generateTemporaryPassword();
+      passwordHash = await hashPassword(tempPassword);
     }
 
     const interviewerId = `IV_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -110,6 +130,7 @@ interviewerRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       phone: phone?.trim() || '',
       is_team_lead: is_team_lead === true || is_team_lead === 'true',
       is_active: is_active !== false && is_active !== 'false',
+      password_hash: passwordHash,
     };
 
     const result = await dataService.createOrUpdateInterviewers([interviewer]);
@@ -120,6 +141,7 @@ interviewerRouter.post('/', adminAuth, async (req: Request, res: Response) => {
         interviewer_id: interviewerId,
         created: result.created,
         updated: result.updated,
+        temporaryPassword: tempPassword || undefined, // 임시 비밀번호 반환 (처음 한 번만)
       },
     });
   } catch (error) {
@@ -128,6 +150,53 @@ interviewerRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     }
     logger.error('Error creating interviewer:', error);
     throw new AppError(500, '면접관 등록 실패');
+  }
+});
+
+// 면접관 비밀번호 변경 (관리자)
+interviewerRouter.put('/:id/password', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { password, generatePassword } = req.body;
+
+    const existing = await dataService.getInterviewerById(id);
+    if (!existing) {
+      throw new AppError(404, '면접관을 찾을 수 없습니다');
+    }
+
+    let passwordHash = '';
+    let tempPassword = '';
+    
+    if (generatePassword) {
+      // 임시 비밀번호 생성
+      tempPassword = generateTemporaryPassword();
+      passwordHash = await hashPassword(tempPassword);
+    } else if (password) {
+      // 사용자 지정 비밀번호
+      if (password.length < 6) {
+        throw new AppError(400, '비밀번호는 최소 6자 이상이어야 합니다');
+      }
+      passwordHash = await hashPassword(password);
+    } else {
+      throw new AppError(400, '비밀번호 또는 generatePassword가 필요합니다');
+    }
+
+    await dataService.updateInterviewerPassword(id, passwordHash);
+
+    res.json({
+      success: true,
+      data: {
+        interviewer_id: id,
+        temporaryPassword: tempPassword || undefined,
+        message: tempPassword ? '임시 비밀번호가 생성되었습니다' : '비밀번호가 변경되었습니다',
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Error updating interviewer password:', error);
+    throw new AppError(500, '비밀번호 변경 실패');
   }
 });
 

@@ -300,6 +300,25 @@ export class GoogleSheetsService {
     if (!result.success) throw new Error(result.message);
     return result.data;
   }
+
+  // ========== Interview History (stub: Google Sheets 백엔드에서 미구현) ==========
+  async createInterviewHistory(_history: any): Promise<void> {}
+  async getInterviewHistory(_interviewId: string): Promise<any[]> {
+    return [];
+  }
+
+  // ========== Interview Evaluations (stub: Google Sheets 백엔드에서 미구현) ==========
+  async createEvaluation(_evaluation: any): Promise<void> {}
+  async updateEvaluation(_evaluationId: string, _updates: any): Promise<void> {}
+  async getEvaluationsByInterview(_interviewId: string): Promise<any[]> {
+    return [];
+  }
+  async getEvaluationsByCandidate(_candidateId: string): Promise<any[]> {
+    return [];
+  }
+  async getEvaluationByInterviewer(_interviewId: string, _candidateId: string, _interviewerId: string): Promise<any | null> {
+    return null;
+  }
 }
 
 export const googleSheetsService = new GoogleSheetsService();

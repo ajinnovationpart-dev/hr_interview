@@ -52,6 +52,15 @@ export function InterviewDetailPage() {
     },
   })
 
+  const { data: evaluationsData } = useQuery({
+    queryKey: ['interview', id, 'evaluations'],
+    queryFn: async () => {
+      const response = await apiA.get(`/interviews/${id}/evaluations`)
+      return response.data.data?.evaluations || []
+    },
+    enabled: !!id && !!data?.interview,
+  })
+
   // AI 분석 mutation
   const analyzeMutation = useMutation({
     mutationFn: async () => {
@@ -253,6 +262,49 @@ export function InterviewDetailPage() {
                 pagination={false}
               />
             </Card>
+
+            {evaluationsData && evaluationsData.length > 0 && (
+              <Card title="면접 평가 현황">
+                <Table
+                  dataSource={evaluationsData}
+                  rowKey="evaluation_id"
+                  pagination={false}
+                  size="small"
+                  columns={[
+                    {
+                      title: '면접관',
+                      key: 'interviewer_id',
+                      render: (_, ev) => {
+                        const r = data?.responseStatus?.find((s: any) => s.interviewerId === ev.interviewer_id)
+                        return r?.name || ev.interviewer_id
+                      },
+                    },
+                    { title: '지원자 ID', dataIndex: 'candidate_id', key: 'candidate_id', width: 120, ellipsis: true },
+                    { title: '기술', dataIndex: 'technical_score', key: 'technical_score', width: 56 },
+                    { title: '소통', dataIndex: 'communication_score', key: 'communication_score', width: 56 },
+                    { title: '적합도', dataIndex: 'fit_score', key: 'fit_score', width: 56 },
+                    { title: '팀워크', dataIndex: 'teamwork_score', key: 'teamwork_score', width: 56 },
+                    { title: '종합', dataIndex: 'overall_score', key: 'overall_score', width: 56 },
+                    {
+                      title: '합격여부',
+                      dataIndex: 'recommendation',
+                      key: 'recommendation',
+                      width: 80,
+                      render: (rec: string) => {
+                        const m: Record<string, { color: string; label: string }> = {
+                          PASS: { color: 'green', label: '합격' },
+                          CONSIDER: { color: 'orange', label: '검토' },
+                          FAIL: { color: 'red', label: '불합격' },
+                        }
+                        const c = m[rec] || { color: 'default', label: rec }
+                        return <Tag color={c.color}>{c.label}</Tag>
+                      },
+                    },
+                    { title: '코멘트', dataIndex: 'comments', key: 'comments', ellipsis: true },
+                  ]}
+                />
+              </Card>
+            )}
 
             {data.timeSelections && data.timeSelections.length > 0 && (
               <Card 

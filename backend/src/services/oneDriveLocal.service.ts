@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 import * as XLSX from 'xlsx';
 import { logger } from '../utils/logger';
 import {
@@ -354,6 +355,10 @@ export class OneDriveLocalService {
         name: 'interview_history',
         headers: ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason']
       },
+      {
+        name: 'evaluations',
+        headers: ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at']
+      },
     ];
 
     logger.info(`Initializing ${requiredSheets.length} required sheets...`);
@@ -396,13 +401,14 @@ export class OneDriveLocalService {
           'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
-          'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'],
+          'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
           'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
           'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
           'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
           'config': ['config_key', 'config_value', 'description', 'updated_at'],
           'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
           'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+          'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
         };
         
         if (sheetConfigs[sheetName]) {
@@ -448,13 +454,14 @@ export class OneDriveLocalService {
         'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
         'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
         'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
-        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'],
+        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
         'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
         'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
         'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
         'config': ['config_key', 'config_value', 'description', 'updated_at'],
         'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
         'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+        'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
       };
       
       const headers = sheetConfigs[sheetName] || [];
@@ -476,13 +483,14 @@ export class OneDriveLocalService {
         'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
         'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
         'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
-        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'],
+        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
         'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
         'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
         'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
         'config': ['config_key', 'config_value', 'description', 'updated_at'],
         'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
         'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+        'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
       };
       const headers = sheetConfigs[sheetName] || [];
       if (headers.length > 0) {
@@ -698,6 +706,9 @@ export class OneDriveLocalService {
       phone: row[3] || '',
       position_applied: row[4] || '',
       created_at: row[5] || '',
+      status: row[6] || '',
+      resume_url: row[7] || '',
+      notes: row[8] || '',
     }));
   }
 
@@ -751,6 +762,9 @@ export class OneDriveLocalService {
       candidate.phone,
       candidate.position_applied,
       candidate.created_at,
+      candidate.status || '',
+      candidate.resume_url || '',
+      candidate.notes || '',
     ]);
   }
 
@@ -810,7 +824,7 @@ export class OneDriveLocalService {
     // 시트가 없으면 먼저 생성
     try {
       await this.ensureSheet('interviewers', [
-        'interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'created_at'
+        'interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'
       ]);
     } catch (err) {
       logger.warn('Error ensuring interviewers sheet:', err);
@@ -827,18 +841,71 @@ export class OneDriveLocalService {
       is_team_lead: row[5] === 'TRUE' || row[5] === true,
       phone: row[6] || '',
       is_active: row[7] === 'TRUE' || row[7] === true,
-      created_at: row[8] || '',
+      password_hash: row[8] || '', // 비밀번호 해시 (읽기 전용, 반환 시 제외)
+      created_at: row[9] || '',
     }));
   }
 
   async getInterviewerById(interviewerId: string): Promise<InterviewerRow | null> {
     const interviewers = await this.getAllInterviewers();
-    return interviewers.find(i => i.interviewer_id === interviewerId) || null;
+    const interviewer = interviewers.find(i => i.interviewer_id === interviewerId) || null;
+    // password_hash는 반환하지 않음 (보안)
+    if (interviewer) {
+      delete (interviewer as any).password_hash;
+    }
+    return interviewer;
   }
 
   async getInterviewerByEmail(email: string): Promise<InterviewerRow | null> {
     const interviewers = await this.getAllInterviewers();
-    return interviewers.find(i => i.email.toLowerCase() === email.toLowerCase()) || null;
+    const interviewer = interviewers.find(i => i.email.toLowerCase() === email.toLowerCase()) || null;
+    // password_hash는 반환하지 않음 (보안)
+    if (interviewer) {
+      delete (interviewer as any).password_hash;
+    }
+    return interviewer;
+  }
+
+  // 비밀번호 해시 포함하여 조회 (인증용)
+  async getInterviewerByEmailWithPassword(email: string): Promise<(InterviewerRow & { password_hash?: string }) | null> {
+    const rows = await this.readWorksheet('interviewers');
+    if (rows.length < 2) return null;
+    
+    const row = rows.slice(1).find(row => (row[2] || '').toLowerCase() === email.toLowerCase());
+    if (!row) return null;
+    
+    return {
+      interviewer_id: row[0] || '',
+      name: row[1] || '',
+      email: row[2] || '',
+      department: row[3] || '',
+      position: row[4] || '',
+      is_team_lead: row[5] === 'TRUE' || row[5] === true,
+      phone: row[6] || '',
+      is_active: row[7] === 'TRUE' || row[7] === true,
+      password_hash: row[8] || '',
+      created_at: row[9] || '',
+    };
+  }
+
+  // 면접관 비밀번호 업데이트
+  async updateInterviewerPassword(interviewerId: string, passwordHash: string): Promise<void> {
+    const rows = await this.readWorksheet('interviewers');
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    
+    try {
+      const index = rows.findIndex((row, idx) => idx > 0 && row[0] === interviewerId);
+      if (index === -1) {
+        throw new Error(`면접관을 찾을 수 없습니다: ${interviewerId}`);
+      }
+      
+      rows[index][8] = passwordHash; // password_hash 필드 업데이트
+      workbook.Sheets['interviewers'] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
   }
 
   async createOrUpdateInterviewers(interviewers: Omit<InterviewerRow, 'created_at'>[]): Promise<{ created: number; updated: number }> {
@@ -862,6 +929,10 @@ export class OneDriveLocalService {
           rows[index][5] = interviewer.is_team_lead ? 'TRUE' : 'FALSE';
           rows[index][6] = interviewer.phone;
           rows[index][7] = interviewer.is_active ? 'TRUE' : 'FALSE';
+          // password_hash는 별도 업데이트 API에서 처리 (보안상)
+          if ((interviewer as any).password_hash) {
+            rows[index][8] = (interviewer as any).password_hash;
+          }
           updated++;
         } else {
           // 생성
@@ -874,6 +945,7 @@ export class OneDriveLocalService {
             interviewer.is_team_lead ? 'TRUE' : 'FALSE',
             interviewer.phone,
             interviewer.is_active ? 'TRUE' : 'FALSE',
+            (interviewer as any).password_hash || '', // 비밀번호 해시
             now,
           ]);
           created++;
@@ -1255,7 +1327,7 @@ export class OneDriveLocalService {
   async getInterviewHistory(interviewId: string): Promise<any[]> {
     const rows = await this.readWorksheet('interview_history');
     if (rows.length < 2) return [];
-    
+
     return rows.slice(1)
       .filter(row => row[1] === interviewId)
       .map(row => ({
@@ -1269,5 +1341,98 @@ export class OneDriveLocalService {
         reason: row[7] || '',
       }))
       .sort((a, b) => new Date(b.changed_at).getTime() - new Date(a.changed_at).getTime());
+  }
+
+  // ========== Interview Evaluations ==========
+
+  private mapEvaluationRow(row: any[]): any {
+    const strengths = row[11];
+    const weaknesses = row[12];
+    return {
+      evaluation_id: row[0] || '',
+      interview_id: row[1] || '',
+      candidate_id: row[2] || '',
+      interviewer_id: row[3] || '',
+      technical_score: row[4] !== undefined && row[4] !== '' ? Number(row[4]) : null,
+      communication_score: row[5] !== undefined && row[5] !== '' ? Number(row[5]) : null,
+      fit_score: row[6] !== undefined && row[6] !== '' ? Number(row[6]) : null,
+      teamwork_score: row[7] !== undefined && row[7] !== '' ? Number(row[7]) : null,
+      overall_score: row[8] !== undefined && row[8] !== '' ? Number(row[8]) : null,
+      recommendation: row[9] || '',
+      comments: row[10] || '',
+      strengths: strengths ? (typeof strengths === 'string' ? (strengths.includes('[') ? JSON.parse(strengths) : strengths.split(',').map((s: string) => s.trim()).filter(Boolean)) : strengths) : [],
+      weaknesses: weaknesses ? (typeof weaknesses === 'string' ? (weaknesses.includes('[') ? JSON.parse(weaknesses) : weaknesses.split(',').map((s: string) => s.trim()).filter(Boolean)) : weaknesses) : [],
+      created_at: row[13] || '',
+    };
+  }
+
+  async createEvaluation(evaluation: any): Promise<void> {
+    const id = evaluation.evaluation_id || randomUUID();
+    const strengths = Array.isArray(evaluation.strengths) ? JSON.stringify(evaluation.strengths) : (evaluation.strengths || '');
+    const weaknesses = Array.isArray(evaluation.weaknesses) ? JSON.stringify(evaluation.weaknesses) : (evaluation.weaknesses || '');
+    await this.ensureSheet('evaluations', [
+      'evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'
+    ]);
+    await this.appendRow('evaluations', [
+      id,
+      evaluation.interview_id,
+      evaluation.candidate_id,
+      evaluation.interviewer_id,
+      evaluation.technical_score ?? '',
+      evaluation.communication_score ?? '',
+      evaluation.fit_score ?? '',
+      evaluation.teamwork_score ?? '',
+      evaluation.overall_score ?? '',
+      evaluation.recommendation || '',
+      evaluation.comments || '',
+      strengths,
+      weaknesses,
+      evaluation.created_at || new Date().toISOString(),
+    ]);
+  }
+
+  async updateEvaluation(evaluationId: string, updates: any): Promise<void> {
+    const rows = await this.readWorksheet('evaluations');
+    if (rows.length < 2) return;
+    const dataRows = rows.slice(1);
+    const colIndex: Record<string, number> = {
+      technical_score: 4, communication_score: 5, fit_score: 6, teamwork_score: 7, overall_score: 8,
+      recommendation: 9, comments: 10, strengths: 11, weaknesses: 12,
+    };
+    const idx = dataRows.findIndex((r: any[]) => (r[0] || '') === evaluationId);
+    if (idx === -1) return;
+    const rowIndex = idx + 2;
+    for (const [key, col] of Object.entries(colIndex)) {
+      const val = (updates as any)[key];
+      if (val !== undefined) {
+        const cellVal = (key === 'strengths' || key === 'weaknesses') && Array.isArray(val) ? JSON.stringify(val) : val;
+        await this.updateCell('evaluations', rowIndex, col + 1, cellVal);
+      }
+    }
+  }
+
+  async getEvaluationsByInterview(interviewId: string): Promise<any[]> {
+    const rows = await this.readWorksheet('evaluations');
+    if (rows.length < 2) return [];
+    return rows.slice(1)
+      .filter((row: any[]) => (row[1] || '') === interviewId)
+      .map((row: any[]) => this.mapEvaluationRow(row));
+  }
+
+  async getEvaluationsByCandidate(candidateId: string): Promise<any[]> {
+    const rows = await this.readWorksheet('evaluations');
+    if (rows.length < 2) return [];
+    return rows.slice(1)
+      .filter((row: any[]) => (row[2] || '') === candidateId)
+      .map((row: any[]) => this.mapEvaluationRow(row));
+  }
+
+  async getEvaluationByInterviewer(interviewId: string, candidateId: string, interviewerId: string): Promise<any | null> {
+    const rows = await this.readWorksheet('evaluations');
+    if (rows.length < 2) return null;
+    const row = rows.slice(1).find(
+      (r: any[]) => (r[1] || '') === interviewId && (r[2] || '') === candidateId && (r[3] || '') === interviewerId
+    );
+    return row ? this.mapEvaluationRow(row) : null;
   }
 }

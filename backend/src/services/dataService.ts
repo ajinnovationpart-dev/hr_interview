@@ -39,6 +39,8 @@ export interface IDataService {
   getAllInterviewers(): Promise<any[]>;
   getInterviewerById(interviewerId: string): Promise<any | null>;
   getInterviewerByEmail(email: string): Promise<any | null>;
+  getInterviewerByEmailWithPassword(email: string): Promise<(any & { password_hash?: string }) | null>;
+  updateInterviewerPassword(interviewerId: string, passwordHash: string): Promise<void>;
   createOrUpdateInterviewers(interviewers: any[]): Promise<{ created: number; updated: number }>;
 
   // Interview-Interviewer Mapping
@@ -68,6 +70,13 @@ export interface IDataService {
   // Interview History
   createInterviewHistory(history: any): Promise<void>;
   getInterviewHistory(interviewId: string): Promise<any[]>;
+
+  // Interview Evaluations
+  createEvaluation(evaluation: any): Promise<void>;
+  updateEvaluation(evaluationId: string, updates: any): Promise<void>;
+  getEvaluationsByInterview(interviewId: string): Promise<any[]>;
+  getEvaluationsByCandidate(candidateId: string): Promise<any[]>;
+  getEvaluationByInterviewer(interviewId: string, candidateId: string, interviewerId: string): Promise<any | null>;
 
   // Config
   getConfig(): Promise<Record<string, string>>;

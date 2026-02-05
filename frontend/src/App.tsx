@@ -14,6 +14,7 @@ import { InterviewerSchedulePage } from './pages/admin/InterviewerSchedulePage'
 import { CalendarPage } from './pages/admin/CalendarPage'
 import { CandidateDetailPage } from './pages/admin/CandidateDetailPage'
 import { ConfirmPage } from './pages/interviewer/ConfirmPage'
+import { InterviewerPortalPage } from './pages/interviewer/InterviewerPortalPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import AuthLoginPage from './pages/AuthLoginPage'
 import { useAuthStore } from './stores/authStore'
@@ -59,6 +60,7 @@ function App() {
         <Route path="/auth/login" element={<AuthLoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/confirm/:token" element={<ConfirmPage />} />
+        <Route path="/interviewer" element={<ProtectedRoute><InterviewerPortalPage /></ProtectedRoute>} />
         
         <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />

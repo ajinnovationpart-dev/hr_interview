@@ -62,6 +62,51 @@ export function adminAuth(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+// 면접관 인증 미들웨어
+export function interviewerAuth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new AppError(401, '인증이 필요합니다');
+    }
+
+    const token = authHeader.split(' ')[1];
+    const jwtSecret = process.env.JWT_SECRET;
+    
+    if (!jwtSecret) {
+      logger.error('JWT_SECRET is not set in environment variables');
+      throw new AppError(500, '서버 설정 오류: JWT_SECRET이 설정되지 않았습니다');
+    }
+
+    const decoded = jwt.verify(token, jwtSecret) as AuthUser;
+
+    if (decoded.role !== 'INTERVIEWER') {
+      throw new AppError(403, '면접관 권한이 필요합니다');
+    }
+
+    if (!decoded.interviewerId) {
+      throw new AppError(403, '면접관 ID가 없습니다');
+    }
+
+    req.user = decoded;
+    next();
+  } catch (error) {
+    if (error instanceof AppError) {
+      return next(error);
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      logger.error('JWT verification error:', error.message);
+      return next(new AppError(401, `토큰 검증 실패: ${error.message}`));
+    }
+    if (error instanceof jwt.TokenExpiredError) {
+      logger.error('JWT token expired');
+      return next(new AppError(401, '토큰이 만료되었습니다'));
+    }
+    logger.error('Auth error:', error);
+    return next(new AppError(401, '유효하지 않은 토큰입니다'));
+  }
+}
+
 export function verifyToken(req: Request, res: Response, next: NextFunction) {
   try {
     const token = req.params.token || req.query.token as string;

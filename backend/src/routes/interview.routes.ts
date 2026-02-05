@@ -373,6 +373,25 @@ interviewRouter.delete('/:id', adminAuth, async (req: Request, res: Response) =>
   }
 });
 
+// 면접별 평가 목록 조회 (관리자)
+interviewRouter.get('/:id/evaluations', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    const evaluations = await dataService.getEvaluationsByInterview(interviewId);
+    res.json({
+      success: true,
+      data: { evaluations },
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(500, '평가 목록 조회 실패');
+  }
+});
+
 // 포털 링크 생성 (면접관별)
 interviewRouter.get('/:id/portal-link/:interviewerId', adminAuth, async (req: Request, res: Response) => {
   try {
@@ -1024,6 +1043,10 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
         emailsSent,
         totalInterviewers: allInterviewerIds.length,
         candidateSchedules,
+        candidates: candidateSchedules.map(schedule => ({
+          candidateId: schedule.candidateId,
+          name: schedule.name,
+        })),
       },
       message: emailsSent === allInterviewerIds.length 
         ? '면접이 생성되었고 모든 면접관에게 이메일이 발송되었습니다.'

@@ -19,6 +19,8 @@ import { calendarRouter } from './routes/calendar.routes';
 import { batchRouter } from './routes/batch.routes';
 import { candidatesRouter } from './routes/candidates.routes';
 import { exportRouter } from './routes/export.routes';
+import { interviewerPortalRouter } from './routes/interviewer-portal.routes';
+import { resumeRouter } from './routes/resume.routes';
 import { schedulerService } from './services/scheduler.service';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 
@@ -34,6 +36,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// B/ngrok 프록시 경유 시 X-Forwarded-For 사용 (express-rate-limit 호환)
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
@@ -129,7 +134,23 @@ app.use('/api/calendar', calendarRouter);
 app.use('/api/batch', batchRouter);
 app.use('/api/candidates', candidatesRouter);
 app.use('/api/export', exportRouter);
+app.use('/api/interviewer-portal', interviewerPortalRouter); // 면접관 전용 포털
+app.use('/api/resumes', resumeRouter); // 이력서 업로드/다운로드
 app.use('/api', testEmailRouter); // 테스트 메일 라우트
+
+// A Backend 프록시 설정 전에 OPTIONS 요청 처리
+app.options('/api/a/*', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24시간
+  }
+  res.status(204).send();
+  logger.info(`[CORS Preflight] OPTIONS ${req.url} from ${origin}`);
+});
 
 // A Backend 프록시 설정 (선택사항)
 if (process.env.A_BACKEND_ENABLED === 'true') {
