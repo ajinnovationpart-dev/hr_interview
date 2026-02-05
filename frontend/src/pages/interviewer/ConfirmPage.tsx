@@ -13,7 +13,7 @@ import {
   Spin,
 } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
@@ -22,14 +22,14 @@ export function ConfirmPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['confirm', token],
     queryFn: async () => {
-      const response = await api.get(`/confirm/${token}`)
+      const response = await apiA.get(`/confirm/${token}`)
       return response.data.data
     },
   })
 
   const mutation = useMutation({
     mutationFn: async (slots: Array<{ date: string; startTime: string; endTime: string }>) => {
-      const response = await api.post(`/confirm/${token}`, { selectedSlots: slots })
+      const response = await apiA.post(`/confirm/${token}`, { selectedSlots: slots })
       return response.data
     },
     onSuccess: (data) => {

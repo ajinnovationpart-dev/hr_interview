@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Spin, message } from 'antd'
 import { useAuthStore } from '../stores/authStore'
-import { api } from '../utils/api'
+import { apiA } from '../utils/apiA'
 
 export function AuthCallbackPage() {
   const [searchParams] = useSearchParams()
@@ -19,7 +19,7 @@ export function AuthCallbackPage() {
     }
 
     // 사용자 정보 조회
-    api.get('/auth/me', {
+    apiA.get('/auth/me', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
