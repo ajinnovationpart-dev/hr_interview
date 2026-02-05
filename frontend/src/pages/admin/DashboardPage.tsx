@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, Table, Button, Tag, Space, Input, Select, Row, Col, Alert } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 import type { ColumnsType } from 'antd/es/table'
 
 interface DashboardStats {
@@ -53,7 +53,7 @@ export function DashboardPage() {
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ['dashboard'],
     queryFn: async () => {
-      const response = await api.get('/interviews/dashboard')
+      const response = await apiA.get('/interviews/dashboard')
       return response.data.data
     },
     retry: 1,
