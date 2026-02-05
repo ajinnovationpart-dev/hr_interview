@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, Form, Input, InputNumber, Switch, Button, Space, message, Divider, Alert } from 'antd'
 import { SaveOutlined, ClockCircleOutlined, BellOutlined, MailOutlined } from '@ant-design/icons'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 
 interface ConfigData {
   interview_duration_minutes?: string
@@ -41,14 +41,14 @@ export function SettingsPage() {
   const { data, isLoading } = useQuery<ConfigData>({
     queryKey: ['config'],
     queryFn: async () => {
-      const response = await api.get('/config')
+      const response = await apiA.get('/config')
       return response.data.data
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: async (values: ConfigData) => {
-      const response = await api.put('/config', values)
+      const response = await apiA.put('/config', values)
       return response.data
     },
     onSuccess: () => {

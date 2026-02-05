@@ -22,7 +22,7 @@ import {
   DeleteOutlined,
   MailOutlined
 } from '@ant-design/icons'
-import { api } from '../../utils/api'
+import { apiA } from '../../utils/apiA'
 import type { ColumnsType } from 'antd/es/table'
 
 interface Interviewer {
@@ -46,7 +46,7 @@ export function InterviewerManagePage() {
   const { data: interviewers, isLoading } = useQuery({
     queryKey: ['interviewers'],
     queryFn: async () => {
-      const response = await api.get('/interviewers')
+      const response = await apiA.get('/interviewers')
       return response.data.data
     },
   })
@@ -55,7 +55,7 @@ export function InterviewerManagePage() {
     mutationFn: async (file: File) => {
       const formData = new FormData()
       formData.append('file', file)
-      const response = await api.post('/interviewers/upload', formData, {
+      const response = await apiA.post('/interviewers/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -73,7 +73,7 @@ export function InterviewerManagePage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/interviewers', data)
+      const response = await apiA.post('/interviewers', data)
       return response.data
     },
     onSuccess: () => {
@@ -90,7 +90,7 @@ export function InterviewerManagePage() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await api.put(`/interviewers/${id}`, data)
+      const response = await apiA.put(`/interviewers/${id}`, data)
       return response.data
     },
     onSuccess: () => {
@@ -107,7 +107,7 @@ export function InterviewerManagePage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await api.delete(`/interviewers/${id}`)
+      const response = await apiA.delete(`/interviewers/${id}`)
       return response.data
     },
     onSuccess: () => {
@@ -121,7 +121,7 @@ export function InterviewerManagePage() {
 
   const testEmailMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await api.post(`/interviewers/${id}/test-email`)
+      const response = await apiA.post(`/interviewers/${id}/test-email`)
       return response.data
     },
     onSuccess: (data) => {
