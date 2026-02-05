@@ -46,6 +46,16 @@ export function SettingsPage() {
     },
   })
 
+  const { data: emailStatus } = useQuery({
+    queryKey: ['emailStatus'],
+    queryFn: async () => {
+      const response = await apiA.get('/test-email/status')
+      return response.data.data as { emailConfigured: boolean; message?: string }
+    },
+    retry: false,
+    staleTime: 60_000,
+  })
+
   const updateMutation = useMutation({
     mutationFn: async (values: ConfigData) => {
       const response = await apiA.put('/config', values)
@@ -176,6 +186,15 @@ export function SettingsPage() {
             }
             style={{ marginBottom: 16 }}
           >
+            {emailStatus && !emailStatus.emailConfigured && (
+              <Alert
+                message="메일 발송이 설정되지 않았습니다"
+                description={emailStatus.message || '서버 .env에 SMTP_USER, SMTP_PASSWORD(또는 SMTP_PASS)를 설정한 뒤 백엔드를 재시작하세요. Gmail은 앱 비밀번호를 사용해야 합니다.'}
+                type="error"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )}
             <Form.Item label="발신 이메일" name="smtp_from_email">
               <Input placeholder="hr@ajnetworks.co.kr" />
             </Form.Item>

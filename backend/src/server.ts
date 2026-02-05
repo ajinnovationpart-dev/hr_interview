@@ -156,6 +156,7 @@ app.use('/api/a/candidates', candidatesRouter);
 app.use('/api/a/export', exportRouter);
 app.use('/api/a/interviewer-portal', interviewerPortalRouter);
 app.use('/api/a/resumes', resumeRouter);
+app.use('/api/a', testEmailRouter); // GET /api/a/test-email/status, POST /api/a/test-email
 
 // A Backend 프록시 설정 전에 OPTIONS 요청 처리
 app.options('/api/a/*', (req, res) => {

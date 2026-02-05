@@ -73,6 +73,11 @@ export class EmailService {
     });
   }
 
+  /** SMTP 설정 여부 (관리자/점검용) */
+  isConfigured(): boolean {
+    return !!this.transporter;
+  }
+
   async sendEmail(options: EmailOptions): Promise<void> {
     // 설정에서 발신자 정보 가져오기 (없으면 환경 변수 또는 기본값 사용)
     let fromEmail = this.fromEmail;

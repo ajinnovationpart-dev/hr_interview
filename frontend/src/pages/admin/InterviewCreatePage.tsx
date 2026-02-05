@@ -134,21 +134,30 @@ export function InterviewCreatePage() {
         const file = files[0]
         if (file.originFileObj) {
           const formData = new FormData()
+          // multer가 body를 채우려면 필드 순서: candidateId 먼저, 그 다음 파일
+          formData.append('candidateId', String(candidateId))
           formData.append('resume', file.originFileObj)
-          formData.append('candidateId', candidateId)
           
           try {
             await apiA.post('/resumes/upload', formData)
           } catch (error: any) {
-            console.error(`이력서 업로드 실패 (${candidate.name}):`, error)
-            message.warning(`${candidate.name}님의 이력서 업로드에 실패했습니다`)
+            const serverMessage = error.response?.data?.message
+            console.error(`이력서 업로드 실패 (${candidate.name}):`, error, serverMessage ? { serverMessage } : '')
+            message.warning(serverMessage || `${candidate.name}님의 이력서 업로드에 실패했습니다`)
           }
         }
       })
       
       await Promise.all(uploadPromises)
-      
-      message.success(`면접이 등록되었습니다. ${data.data.emailsSent}명에게 메일이 발송되었습니다.`)
+
+      const total = data.data.totalInterviewers ?? 0
+      const sent = data.data.emailsSent ?? 0
+      const msg = data.message || `면접이 등록되었습니다. ${sent}명에게 메일이 발송되었습니다.`
+      if (total > 0 && sent === 0) {
+        message.warning(msg)
+      } else {
+        message.success(msg)
+      }
       navigate('/admin/dashboard')
     },
     onError: (error: any) => {

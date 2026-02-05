@@ -1035,6 +1035,15 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     
     logger.info(`Interview created: ${interviewId}, Emails sent: ${emailsSent}/${allInterviewerIds.length}`);
     
+    const allSent = emailsSent === allInterviewerIds.length;
+    const noneSent = emailsSent === 0 && allInterviewerIds.length > 0;
+    let message = allSent
+      ? '면접이 생성되었고 모든 면접관에게 이메일이 발송되었습니다.'
+      : `면접이 생성되었습니다. ${emailsSent}명의 면접관에게 이메일이 발송되었습니다. (총 ${allInterviewerIds.length}명 중)`;
+    if (noneSent) {
+      message += ' 메일이 발송되지 않았습니다. SMTP 설정(.env의 SMTP_USER, SMTP_PASSWORD)과 서버 로그를 확인하거나, POST /api/test-email로 테스트 메일을 보내 보세요.';
+    }
+
     res.json({
       success: true,
       data: {
@@ -1048,9 +1057,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           name: schedule.name,
         })),
       },
-      message: emailsSent === allInterviewerIds.length 
-        ? '면접이 생성되었고 모든 면접관에게 이메일이 발송되었습니다.'
-        : `면접이 생성되었습니다. ${emailsSent}명의 면접관에게 이메일이 발송되었습니다. (총 ${allInterviewerIds.length}명 중)`,
+      message,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

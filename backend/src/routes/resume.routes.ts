@@ -62,6 +62,17 @@ const upload = multer({
 // 이력서 업로드
 resumeRouter.post('/upload', adminAuth, upload.single('resume'), async (req: Request, res: Response) => {
   try {
+    // 400 원인 파악용 로그 (multipart 시 body는 multer가 채움)
+    const bodyKeys = req.body ? Object.keys(req.body) : [];
+    const hasFile = !!req.file;
+    if (!hasFile || !req.body?.candidateId) {
+      logger.warn('Resume upload 400', {
+        hasFile,
+        bodyKeys,
+        candidateId: req.body?.candidateId ?? '(없음)',
+      });
+    }
+
     if (!req.file) {
       throw new AppError(400, '이력서 파일을 업로드해주세요');
     }

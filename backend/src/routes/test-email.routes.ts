@@ -5,6 +5,19 @@ import { AppError } from '../middlewares/errorHandler';
 
 const testEmailRouter = Router();
 
+// 메일 발송 가능 여부 확인 (SMTP 설정 체크, 인증 없이 - 점검용)
+testEmailRouter.get('/test-email/status', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: {
+      emailConfigured: emailService.isConfigured(),
+      message: emailService.isConfigured()
+        ? 'SMTP가 설정되어 있습니다.'
+        : 'SMTP 미설정: .env에 SMTP_USER, SMTP_PASSWORD(SMTP_PASS)를 설정하세요.',
+    },
+  });
+});
+
 // 테스트 메일 발송 엔드포인트 (인증 없이 접근 가능 - 개발용)
 testEmailRouter.post('/test-email', async (req: Request, res: Response) => {
   try {
