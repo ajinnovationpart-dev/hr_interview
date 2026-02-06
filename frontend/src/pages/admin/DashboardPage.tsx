@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Card, Table, Button, Tag, Space, Input, Select, Row, Col, Alert } from 'antd'
+import { Card, Table, Button, Tag, Space, Input, Select, Row, Col, Alert, Tooltip, Typography } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
 import { apiA } from '../../utils/apiA'
@@ -44,6 +44,9 @@ const statusLabels: Record<string, string> = {
   CONFIRMED: '완료',
   NO_COMMON: '공통 없음',
 }
+
+/** 대시보드 "공통 없음" 설명: 면접관이 모두 응답했지만 겹치는 가능 일정이 없어 확정되지 않은 상태 */
+const NO_COMMON_DESCRIPTION = '면접관들이 모두 가능 일정을 제출했으나, 서로 겹치는 시간대가 없어 일정을 확정하지 못한 면접 건수입니다. 일정 재조율 또는 취소 처리 후 다시 진행할 수 있습니다.'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -145,8 +148,11 @@ export function DashboardPage() {
   return (
     <div>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1>대시보드</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1>대시보드</h1>
+            <Typography.Text type="secondary">면접 현황 요약: 대기 중 → 진행 중 → 완료 / 공통 없음(겹치는 일정 없음) 상태를 한눈에 확인합니다.</Typography.Text>
+          </div>
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -182,11 +188,18 @@ export function DashboardPage() {
                 </Card>
               </Col>
               <Col span={6}>
-                <Card title="공통 없음">
-                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff4d4f' }}>
-                    {data.stats.noCommon || 0}
-                  </div>
-                </Card>
+                <Tooltip title={NO_COMMON_DESCRIPTION}>
+                  <Card
+                    title={<span>공통 없음 <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>(도움말)</Typography.Text></span>}
+                  >
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#ff4d4f' }}>
+                      {data.stats.noCommon || 0}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
+                      겹치는 일정 없음
+                    </div>
+                  </Card>
+                </Tooltip>
               </Col>
             </Row>
             {(data.stats.scheduled || data.stats.inProgress || data.stats.completed || data.stats.cancelled || data.stats.noShow) && (
