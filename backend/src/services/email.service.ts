@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
 import { dataService } from './dataService';
+import { getScheduleButtonImageBuffer } from '../utils/emailButtonImage';
 
 // 환경 변수 로드
 dotenv.config();
@@ -11,6 +12,8 @@ export interface EmailOptions {
   subject: string;
   htmlBody: string;
   cc?: string[];
+  /** 메일 본문에 cid:scheduleBtn 이 있으면 일정 선택 버튼 이미지를 첨부함 (아웃룩 PC 호환) */
+  useScheduleButtonImage?: boolean;
 }
 
 export class EmailService {
@@ -180,13 +183,35 @@ export class EmailService {
       const uniqueRecipients = [...new Set(validatedRecipients)];
       logger.info(`   📬 Final recipient list (${uniqueRecipients.length} unique): ${uniqueRecipients.join(', ')}`);
       
+      let htmlBody = options.htmlBody;
+      const attachments: nodemailer.SendMailOptions['attachments'] = [];
+      if (options.useScheduleButtonImage || htmlBody.includes('cid:scheduleBtn')) {
+        try {
+          const buttonBuffer = await getScheduleButtonImageBuffer();
+          attachments.push({
+            filename: 'schedule-button.png',
+            content: buttonBuffer,
+            cid: 'scheduleBtn',
+          });
+        } catch (err) {
+          logger.warn('Schedule button image attach failed, email will send with link button:', err);
+          // 이미지 없이 보내면 cid 깨짐 방지: img 블록을 텍스트 링크 버튼으로 교체 (href는 기존 a 태그에서 추출)
+          htmlBody = htmlBody.replace(
+            /<a href="([^"]+)"[^>]*>\s*<img[^>]*src="cid:scheduleBtn"[^>]*\/?>\s*<\/a>/gi,
+            (_match, href) =>
+              `<a href="${href}" target="_blank" style="display:inline-block;padding:16px 32px;background:#2563eb;color:#ffffff !important;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">일정 선택하기</a>`
+          );
+        }
+      }
+
       const mailOptions = {
         from: fromAddress,
         to: uniqueRecipients.join(', '),
         subject: options.subject,
-        html: options.htmlBody,
+        html: htmlBody,
         cc: options.cc?.join(', '),
         replyTo: replyTo,
+        attachments: attachments.length > 0 ? attachments : undefined,
         // Outlook 스팸 필터 회피를 위한 추가 헤더
         headers: {
           'Message-ID': messageId,
@@ -203,7 +228,7 @@ export class EmailService {
           'X-Entity-Ref-ID': messageId,
         },
         // 텍스트 버전 추가 (HTML에서 추출)
-        text: this.extractTextFromHtml(options.htmlBody),
+        text: this.extractTextFromHtml(htmlBody),
         // Outlook 호환성을 위한 추가 설정
         envelope: {
           from: fromEmail,

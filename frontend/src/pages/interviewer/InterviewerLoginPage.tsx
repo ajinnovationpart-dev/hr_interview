@@ -23,7 +23,13 @@ export function InterviewerLoginPage() {
       message.success('로그인 성공')
       navigate('/interviewer')
     } catch (error: any) {
-      message.error(error.response?.data?.message || '로그인에 실패했습니다')
+      const msg = error.response?.data?.message
+      const isNetwork = !error.response && (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message === 'Network Error')
+      if (isNetwork) {
+        message.error('서버에 연결할 수 없습니다. 백엔드 주소(VITE_API_URL)와 네트워크를 확인하세요.')
+      } else {
+        message.error(msg || '로그인에 실패했습니다')
+      }
     } finally {
       setLoading(false)
     }

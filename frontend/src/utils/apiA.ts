@@ -45,6 +45,7 @@ console.log('🔧 VITE_API_URL (원본):', import.meta.env.VITE_API_URL)
 
 export const apiA = axios.create({
   baseURL: API_A_URL,
+  timeout: 20000, // 20초 후 응답 없으면 에러 (무한 로딩 방지)
   headers: {
     'Content-Type': 'application/json',
     'ngrok-skip-browser-warning': '1', // ngrok 브라우저 경고 페이지 건너뛰기
