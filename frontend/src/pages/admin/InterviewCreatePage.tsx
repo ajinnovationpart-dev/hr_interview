@@ -239,6 +239,7 @@ export function InterviewCreatePage() {
         onFinish={handleSubmit}
         initialValues={{
           candidates: [{ name: '', email: '', phone: '', positionApplied: '', interviewerIds: [] }],
+          proposedStartTime: dayjs().hour(9).minute(0).second(0).millisecond(0),
         }}
       >
         <Title level={4}>1. 공고 정보</Title>
