@@ -87,3 +87,38 @@ export function getDefaultSlotMinutes(config?: BusinessHoursConfig | null): { st
   const end = Math.min(start + 60, getWorkEndMinutes(config))
   return { start, end }
 }
+
+/**
+ * 주어진 시간(분)이 업무시간(점심 제외) 내인지
+ */
+function isWithinBusinessHours(totalMinutes: number, config?: BusinessHoursConfig | null): boolean {
+  const { workStart, workEnd, lunchStart, lunchEnd } = parseConfig(config)
+  if (totalMinutes < workStart || totalMinutes >= workEnd) return false
+  if (totalMinutes >= lunchStart && totalMinutes < lunchEnd) return false
+  return true
+}
+
+/**
+ * 시간(분)을 업무시간 구간으로 클램프. 업무 밖이면 가장 가까운 허용 시각(분) 반환.
+ */
+function clampMinutesToBusinessHours(totalMinutes: number, config?: BusinessHoursConfig | null): number {
+  const { workStart, workEnd, lunchStart, lunchEnd } = parseConfig(config)
+  if (totalMinutes < workStart) return workStart
+  if (totalMinutes >= lunchStart && totalMinutes < lunchEnd) return lunchEnd
+  if (totalMinutes >= workEnd) return workEnd - 30
+  return totalMinutes
+}
+
+/**
+ * Dayjs 값을 업무시간 내로 보정. (TimePicker value가 00:00 등으로 되어 있을 때 사용)
+ */
+export function clampTimeToBusinessHours(
+  time: Dayjs | null | undefined,
+  config?: BusinessHoursConfig | null
+): Dayjs | null {
+  if (!time || !time.isValid()) return null
+  const totalMinutes = time.hour() * 60 + time.minute()
+  if (isWithinBusinessHours(totalMinutes, config)) return time
+  const clamped = clampMinutesToBusinessHours(totalMinutes, config)
+  return time.hour(Math.floor(clamped / 60)).minute(clamped % 60).second(0).millisecond(0)
+}

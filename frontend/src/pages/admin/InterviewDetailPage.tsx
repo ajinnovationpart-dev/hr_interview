@@ -5,7 +5,7 @@ import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Mod
 import { ArrowLeftOutlined, ThunderboltOutlined, CheckCircleOutlined, CopyOutlined, DeleteOutlined, BellOutlined, EditOutlined, CloseCircleOutlined, CheckCircleFilled } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { getDisabledTime } from '../../utils/businessHours'
+import { getDisabledTime, clampTimeToBusinessHours } from '../../utils/businessHours'
 import type { ColumnsType } from 'antd/es/table'
 
 const statusColors: Record<string, string> = {
@@ -406,9 +406,11 @@ export function InterviewDetailPage() {
                       <Button
                         icon={<EditOutlined />}
                         onClick={() => {
+                          const rawStart = data.interview.proposed_start_time ? dayjs(data.interview.proposed_start_time, 'HH:mm') : null
+                          const startTime = rawStart ? (clampTimeToBusinessHours(rawStart, config) ?? rawStart) : null
                           editForm.setFieldsValue({
                             interviewDate: data.interview.proposed_date ? dayjs(data.interview.proposed_date) : null,
-                            startTime: data.interview.proposed_start_time ? dayjs(data.interview.proposed_start_time, 'HH:mm') : null,
+                            startTime,
                             duration: 60,
                           })
                           setIsEditModalOpen(true)
@@ -513,6 +515,7 @@ export function InterviewDetailPage() {
               minuteStep={30}
               style={{ width: '100%' }}
               disabledTime={getDisabledTime(config)}
+              onChange={(time) => time && editForm.setFieldValue('startTime', clampTimeToBusinessHours(time, config) ?? time)}
             />
           </Form.Item>
           <Form.Item

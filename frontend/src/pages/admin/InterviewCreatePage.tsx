@@ -6,7 +6,7 @@ import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { getDisabledTime } from '../../utils/businessHours'
+import { getDisabledTime, clampTimeToBusinessHours } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
@@ -280,7 +280,13 @@ export function InterviewCreatePage() {
               minuteStep={30}
               style={{ width: '100%' }}
               disabledTime={getDisabledTime(config)}
-              onChange={calculateEndTime}
+              onChange={(time) => {
+                const clamped = time ? clampTimeToBusinessHours(time, config) ?? time : null
+                if (clamped) {
+                  form.setFieldsValue({ proposedStartTime: clamped })
+                  calculateEndTime()
+                }
+              }}
             />
           </Form.Item>
 

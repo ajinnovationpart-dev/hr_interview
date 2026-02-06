@@ -14,7 +14,7 @@ import {
 } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { getDisabledTime, getDefaultSlotMinutes } from '../../utils/businessHours'
+import { getDisabledTime, getDefaultSlotMinutes, clampTimeToBusinessHours } from '../../utils/businessHours'
 
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
@@ -69,7 +69,9 @@ export function ConfirmPage() {
 
   const handleUpdateSlot = (index: number, field: 'date' | 'startTime' | 'endTime', value: Dayjs) => {
     const updated = [...selectedSlots]
-    updated[index] = { ...updated[index], [field]: value }
+    const clamped =
+      field === 'startTime' || field === 'endTime' ? clampTimeToBusinessHours(value, config) ?? value : value
+    updated[index] = { ...updated[index], [field]: clamped }
     setSelectedSlots(updated)
   }
 
@@ -136,19 +138,21 @@ export function ConfirmPage() {
                     onChange={(date) => date && handleUpdateSlot(index, 'date', date)}
                   />
                   <TimePicker
-                    value={slot.startTime}
+                    value={clampTimeToBusinessHours(slot.startTime, config) ?? slot.startTime}
                     format="HH:mm"
                     disabledTime={disabledTime}
                     minuteStep={30}
-                    onChange={(time) => time && handleUpdateSlot(index, 'startTime', time)}
+                    changeOnScroll
+                    onChange={(time) => time && handleUpdateSlot(index, 'startTime', clampTimeToBusinessHours(time, config) ?? time)}
                   />
                   <span>~</span>
                   <TimePicker
-                    value={slot.endTime}
+                    value={clampTimeToBusinessHours(slot.endTime, config) ?? slot.endTime}
                     format="HH:mm"
                     disabledTime={disabledTime}
                     minuteStep={30}
-                    onChange={(time) => time && handleUpdateSlot(index, 'endTime', time)}
+                    changeOnScroll
+                    onChange={(time) => time && handleUpdateSlot(index, 'endTime', clampTimeToBusinessHours(time, config) ?? time)}
                   />
                   <Button danger onClick={() => handleRemoveSlot(index)}>
                     삭제
