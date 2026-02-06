@@ -139,6 +139,12 @@ export class EmailService {
         replyTo = fromEmail; // From과 동일하게 강제 설정
       }
 
+      // 수신자 없으면 조기 반환 (SMTP 호출 방지)
+      if (!options.to || options.to.length === 0) {
+        logger.warn('sendEmail: No recipients (to is empty). Skipping send.');
+        return;
+      }
+
       // 각 수신자별 상세 검증
       const validatedRecipients: string[] = [];
       options.to.forEach((email, index) => {
@@ -155,6 +161,11 @@ export class EmailService {
         
         validatedRecipients.push(normalized);
       });
+
+      if (validatedRecipients.length === 0) {
+        logger.warn('sendEmail: No valid recipients after validation. Skipping send.');
+        return;
+      }
       
       // SMTP 인증 계정과 발신자 주소 도메인 불일치 확인
       const smtpUser = process.env.SMTP_USER || '';

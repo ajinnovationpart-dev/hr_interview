@@ -5,6 +5,7 @@ import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Mod
 import { ArrowLeftOutlined, ThunderboltOutlined, CheckCircleOutlined, CopyOutlined, DeleteOutlined, BellOutlined, EditOutlined, CloseCircleOutlined, CheckCircleFilled } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { apiA } from '../../utils/apiA'
+import { getDisabledTime } from '../../utils/businessHours'
 import type { ColumnsType } from 'antd/es/table'
 
 const statusColors: Record<string, string> = {
@@ -59,6 +60,19 @@ export function InterviewDetailPage() {
       return response.data.data?.evaluations || []
     },
     enabled: !!id && !!data?.interview,
+  })
+
+  const { data: config } = useQuery({
+    queryKey: ['config'],
+    queryFn: async () => {
+      try {
+        const response = await apiA.get('/config')
+        return response.data.data
+      } catch {
+        return null
+      }
+    },
+    retry: false,
   })
 
   // AI 분석 mutation
@@ -494,7 +508,12 @@ export function InterviewDetailPage() {
             name="startTime"
             rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}
           >
-            <TimePicker format="HH:mm" style={{ width: '100%' }} />
+            <TimePicker
+              format="HH:mm"
+              minuteStep={30}
+              style={{ width: '100%' }}
+              disabledTime={getDisabledTime(config)}
+            />
           </Form.Item>
           <Form.Item
             label="소요 시간 (분)"

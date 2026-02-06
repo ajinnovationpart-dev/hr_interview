@@ -5,6 +5,7 @@ import { AppError } from '../middlewares/errorHandler';
 import { dataService } from '../services/dataService';
 import { emailService } from '../services/email.service';
 import { commonSlotService } from '../services/commonSlot.service';
+import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
 
 export const confirmRouter = Router();
@@ -125,39 +126,56 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
         // 공통 일정이 있으면 첫 번째로 확정
         const firstSlot = commonSlotService.sortSlots(commonSlotsResult.commonSlots)[0];
 
+        const confirmedAt = new Date().toISOString();
         await dataService.createConfirmedSchedule({
           interview_id: interviewId,
+          candidate_id: '',
           confirmed_date: firstSlot.date,
           confirmed_start_time: firstSlot.startTime,
           confirmed_end_time: firstSlot.endTime,
+          confirmed_at: confirmedAt,
         });
 
         await dataService.updateInterviewStatus(interviewId, 'CONFIRMED');
         status = 'CONFIRMED';
         message = '모든 면접관이 응답하여 일정이 확정되었습니다';
 
-        // 확정 메일 발송
+        // 확정 메일 발송 (면접관 + 지원자 이메일 있으면 포함)
         const allInterviewers = await dataService.getAllInterviewers();
         const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
         const interviewerEmails = mappings
           .map(m => interviewerMap.get(m.interviewer_id)?.email)
-          .filter(Boolean) as string[];
+          .filter((e): e is string => !!e?.trim());
 
-        const candidates = interview.candidates.split(',').map(c => c.trim());
-
+        let candidateEmails: string[] = [];
         try {
-          await emailService.sendConfirmationEmail(
-            interviewerEmails,
-            interview.main_notice,
-            interview.team_name,
-            firstSlot.date,
-            firstSlot.startTime,
-            firstSlot.endTime,
-            candidates
-          );
-        } catch (error) {
-          console.error('Failed to send confirmation email:', error);
-          // 이메일 발송 실패해도 일정 확정은 완료
+          const candidatesByInterview = await dataService.getCandidatesByInterview(interviewId);
+          candidateEmails = candidatesByInterview.map((c: { email?: string }) => c.email).filter((e): e is string => !!e?.trim());
+        } catch (e) {
+          logger.debug('Could not load candidate emails for confirmation:', e);
+        }
+        const allRecipients = [...new Set([...interviewerEmails, ...candidateEmails])];
+        const candidates = interview.candidates ? interview.candidates.split(',').map((c: string) => c.trim()) : [];
+
+        if (allRecipients.length > 0) {
+          try {
+            logger.info(`[일정 확정] Sending confirmation email to ${allRecipients.length} recipient(s) (interviewers: ${interviewerEmails.length}, candidates: ${candidateEmails.length}) for interview ${interviewId}`);
+            await emailService.sendConfirmationEmail(
+              allRecipients,
+              interview.main_notice,
+              interview.team_name,
+              firstSlot.date,
+              firstSlot.startTime,
+              firstSlot.endTime,
+              candidates
+            );
+            logger.info(`[일정 확정] Confirmation email sent successfully for ${interviewId}`);
+          } catch (error: any) {
+            logger.error('[일정 확정] Failed to send confirmation email:', { interviewId, error: error?.message || error, stack: error?.stack });
+            // 이메일 발송 실패해도 일정 확정은 완료
+          }
+        } else {
+          logger.warn(`[일정 확정] No recipient emails (interviewers/candidates) to send confirmation for interview ${interviewId}`);
         }
       } else {
         // 공통 일정이 없으면 PARTIAL 상태 유지 (나중에 NO_COMMON으로 변경 가능)

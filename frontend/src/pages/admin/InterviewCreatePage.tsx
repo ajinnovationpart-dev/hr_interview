@@ -6,6 +6,7 @@ import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
+import { getDisabledTime } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
@@ -278,6 +279,7 @@ export function InterviewCreatePage() {
               format="HH:mm" 
               minuteStep={30}
               style={{ width: '100%' }}
+              disabledTime={getDisabledTime(config)}
               onChange={calculateEndTime}
             />
           </Form.Item>

@@ -14,6 +14,7 @@ import {
 } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
+import { getDisabledTime, getDefaultSlotMinutes } from '../../utils/businessHours'
 
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
@@ -26,6 +27,24 @@ export function ConfirmPage() {
       return response.data.data
     },
   })
+
+  const { data: config } = useQuery({
+    queryKey: ['config'],
+    queryFn: async () => {
+      try {
+        const response = await apiA.get('/config')
+        return response.data.data
+      } catch {
+        return null
+      }
+    },
+    retry: false,
+  })
+
+  const disabledTime = getDisabledTime(config)
+  const defaultSlot = getDefaultSlotMinutes(config)
+  const defaultStart = dayjs().hour(Math.floor(defaultSlot.start / 60)).minute(defaultSlot.start % 60).second(0).millisecond(0)
+  const defaultEnd = dayjs().hour(Math.floor(defaultSlot.end / 60)).minute(defaultSlot.end % 60).second(0).millisecond(0)
 
   const mutation = useMutation({
     mutationFn: async (slots: Array<{ date: string; startTime: string; endTime: string }>) => {
@@ -41,7 +60,7 @@ export function ConfirmPage() {
   })
 
   const handleAddSlot = () => {
-    setSelectedSlots([...selectedSlots, { date: dayjs(), startTime: dayjs().hour(9).minute(0), endTime: dayjs().hour(10).minute(0) }])
+    setSelectedSlots([...selectedSlots, { date: dayjs(), startTime: defaultStart, endTime: defaultEnd }])
   }
 
   const handleRemoveSlot = (index: number) => {
@@ -119,12 +138,16 @@ export function ConfirmPage() {
                   <TimePicker
                     value={slot.startTime}
                     format="HH:mm"
+                    disabledTime={disabledTime}
+                    minuteStep={30}
                     onChange={(time) => time && handleUpdateSlot(index, 'startTime', time)}
                   />
                   <span>~</span>
                   <TimePicker
                     value={slot.endTime}
                     format="HH:mm"
+                    disabledTime={disabledTime}
+                    minuteStep={30}
                     onChange={(time) => time && handleUpdateSlot(index, 'endTime', time)}
                   />
                   <Button danger onClick={() => handleRemoveSlot(index)}>
