@@ -14,6 +14,7 @@ import { InterviewerSchedulePage } from './pages/admin/InterviewerSchedulePage'
 import { CalendarPage } from './pages/admin/CalendarPage'
 import { CandidateDetailPage } from './pages/admin/CandidateDetailPage'
 import { ConfirmPage } from './pages/interviewer/ConfirmPage'
+import { InterviewerLoginPage } from './pages/interviewer/InterviewerLoginPage'
 import { InterviewerPortalPage } from './pages/interviewer/InterviewerPortalPage'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import AuthLoginPage from './pages/AuthLoginPage'
@@ -60,7 +61,8 @@ function App() {
         <Route path="/auth/login" element={<AuthLoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/confirm/:token" element={<ConfirmPage />} />
-        <Route path="/interviewer" element={<ProtectedRoute><InterviewerPortalPage /></ProtectedRoute>} />
+        <Route path="/interviewer/login" element={<InterviewerLoginPage />} />
+        <Route path="/interviewer" element={<ProtectedInterviewerRoute><InterviewerPortalPage /></ProtectedInterviewerRoute>} />
         
         <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
@@ -87,11 +89,21 @@ function App() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
-  
+
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace />
   }
-  
+
+  return <>{children}</>
+}
+
+function ProtectedInterviewerRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/interviewer/login" replace />
+  }
+
   return <>{children}</>
 }
 

@@ -20,7 +20,8 @@ import {
   PlusOutlined, 
   EditOutlined, 
   DeleteOutlined,
-  MailOutlined
+  MailOutlined,
+  KeyOutlined
 } from '@ant-design/icons'
 import { apiA } from '../../utils/apiA'
 import type { ColumnsType } from 'antd/es/table'
@@ -40,6 +41,7 @@ export function InterviewerManagePage() {
   const [searchText, setSearchText] = useState('')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingInterviewer, setEditingInterviewer] = useState<Interviewer | null>(null)
+  const [passwordModal, setPasswordModal] = useState<{ name: string; email: string; temporaryPassword: string } | null>(null)
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
 
@@ -73,11 +75,19 @@ export function InterviewerManagePage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiA.post('/interviewers', data)
+      const response = await apiA.post('/interviewers', { ...data, generatePassword: true })
       return response.data
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       message.success('면접관이 등록되었습니다')
+      const pw = data?.data?.temporaryPassword
+      if (pw) {
+        setPasswordModal({
+          name: form.getFieldValue('name') || '면접관',
+          email: form.getFieldValue('email') || '',
+          temporaryPassword: pw,
+        })
+      }
       queryClient.invalidateQueries({ queryKey: ['interviewers'] })
       setIsModalOpen(false)
       form.resetFields()
@@ -129,6 +139,30 @@ export function InterviewerManagePage() {
     },
     onError: (error: any) => {
       message.error(error.response?.data?.message || '테스트 메일 발송에 실패했습니다')
+    },
+  })
+
+  const setPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiA.put(`/interviewers/${id}/password`, { generatePassword: true })
+      return response.data
+    },
+    onSuccess: (data, id) => {
+      const pw = data?.data?.temporaryPassword
+      const interviewer = interviewers?.find((i: Interviewer) => i.interviewer_id === id)
+      if (pw && interviewer) {
+        setPasswordModal({
+          name: interviewer.name,
+          email: interviewer.email,
+          temporaryPassword: pw,
+        })
+      } else {
+        message.success('비밀번호가 설정되었습니다')
+      }
+      queryClient.invalidateQueries({ queryKey: ['interviewers'] })
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || '비밀번호 설정에 실패했습니다')
     },
   })
 
@@ -253,6 +287,14 @@ export function InterviewerManagePage() {
             loading={testEmailMutation.isPending}
           >
             테스트 메일
+          </Button>
+          <Button
+            type="link"
+            icon={<KeyOutlined />}
+            onClick={() => setPasswordMutation.mutate(record.interviewer_id)}
+            loading={setPasswordMutation.isPending}
+          >
+            비밀번호 설정
           </Button>
           <Popconfirm
             title="면접관 비활성화"
@@ -396,6 +438,43 @@ export function InterviewerManagePage() {
             <Switch />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="임시 비밀번호"
+        open={!!passwordModal}
+        onCancel={() => setPasswordModal(null)}
+        footer={
+          <Button type="primary" onClick={() => setPasswordModal(null)}>
+            확인
+          </Button>
+        }
+        closable
+      >
+        {passwordModal && (
+          <div>
+            <p>
+              <strong>{passwordModal.name}</strong>({passwordModal.email}) 면접관 포털 로그인용 임시 비밀번호입니다.
+            </p>
+            <p>면접관에게 전달한 뒤, 로그인 주소는 <strong>/interviewer/login</strong> 입니다.</p>
+            <Space.Compact style={{ width: '100%', marginTop: 8 }}>
+              <Input
+                readOnly
+                value={passwordModal.temporaryPassword}
+                style={{ fontFamily: 'monospace' }}
+              />
+              <Button
+                type="primary"
+                onClick={() => {
+                  navigator.clipboard.writeText(passwordModal.temporaryPassword)
+                  message.success('클립보드에 복사되었습니다')
+                }}
+              >
+                복사
+              </Button>
+            </Space.Compact>
+          </div>
+        )}
       </Modal>
     </div>
   )
