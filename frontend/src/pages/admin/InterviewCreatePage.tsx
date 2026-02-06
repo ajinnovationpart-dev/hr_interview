@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
@@ -231,6 +231,8 @@ export function InterviewCreatePage() {
     })
   }
 
+  const disabledTimeFn = useMemo(() => getDisabledTime(config), [config])
+
   return (
     <Card title="새 면접 등록">
       <Form
@@ -279,8 +281,9 @@ export function InterviewCreatePage() {
             <TimePicker 
               format="HH:mm" 
               minuteStep={30}
+              showNow={false}
               style={{ width: '100%' }}
-              disabledTime={getDisabledTime(config)}
+              disabledTime={disabledTimeFn}
               onChange={(time) => {
                 const clamped = time ? clampTimeToBusinessHours(time, config) ?? time : null
                 if (clamped) {

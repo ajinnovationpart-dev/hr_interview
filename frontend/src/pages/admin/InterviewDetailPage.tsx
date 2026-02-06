@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Modal, Form, DatePicker, TimePicker, Input, Select } from 'antd'
@@ -74,6 +74,8 @@ export function InterviewDetailPage() {
     },
     retry: false,
   })
+
+  const disabledTimeFn = useMemo(() => getDisabledTime(config), [config])
 
   // AI 분석 mutation
   const analyzeMutation = useMutation({
@@ -513,8 +515,9 @@ export function InterviewDetailPage() {
             <TimePicker
               format="HH:mm"
               minuteStep={30}
+              showNow={false}
               style={{ width: '100%' }}
-              disabledTime={getDisabledTime(config)}
+              disabledTime={disabledTimeFn}
               onChange={(time) => time && editForm.setFieldValue('startTime', clampTimeToBusinessHours(time, config) ?? time)}
             />
           </Form.Item>

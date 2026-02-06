@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
@@ -41,7 +41,7 @@ export function ConfirmPage() {
     retry: false,
   })
 
-  const disabledTime = getDisabledTime(config)
+  const disabledTime = useMemo(() => getDisabledTime(config), [config])
   const defaultSlot = getDefaultSlotMinutes(config)
   const defaultStart = dayjs().hour(Math.floor(defaultSlot.start / 60)).minute(defaultSlot.start % 60).second(0).millisecond(0)
   const defaultEnd = dayjs().hour(Math.floor(defaultSlot.end / 60)).minute(defaultSlot.end % 60).second(0).millisecond(0)
@@ -142,6 +142,7 @@ export function ConfirmPage() {
                     format="HH:mm"
                     disabledTime={disabledTime}
                     minuteStep={30}
+                    showNow={false}
                     changeOnScroll
                     onChange={(time) => time && handleUpdateSlot(index, 'startTime', clampTimeToBusinessHours(time, config) ?? time)}
                   />
@@ -151,6 +152,7 @@ export function ConfirmPage() {
                     format="HH:mm"
                     disabledTime={disabledTime}
                     minuteStep={30}
+                    showNow={false}
                     changeOnScroll
                     onChange={(time) => time && handleUpdateSlot(index, 'endTime', clampTimeToBusinessHours(time, config) ?? time)}
                   />
