@@ -1,7 +1,7 @@
 import React from 'react'
 import { Typography } from 'antd'
 
-const { Title, Paragraph, Text } = Typography
+const { Paragraph } = Typography
 
 export interface ScreenManual {
   title: string
