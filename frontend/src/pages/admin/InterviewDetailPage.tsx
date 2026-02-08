@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Modal, Form, DatePicker, TimePicker, Input, Select } from 'antd'
 import { ArrowLeftOutlined, ThunderboltOutlined, CheckCircleOutlined, CopyOutlined, DeleteOutlined, BellOutlined, EditOutlined, CloseCircleOutlined, CheckCircleFilled } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { getDisabledTime, clampTimeToBusinessHours } from '../../utils/businessHours'
+import { clampTimeToBusinessHours } from '../../utils/businessHours'
 import type { ColumnsType } from 'antd/es/table'
 
 const statusColors: Record<string, string> = {
@@ -74,8 +74,6 @@ export function InterviewDetailPage() {
     },
     retry: false,
   })
-
-  const disabledTimeFn = useMemo(() => getDisabledTime(config), [config])
 
   // AI 분석 mutation
   const analyzeMutation = useMutation({
@@ -517,7 +515,6 @@ export function InterviewDetailPage() {
               minuteStep={30}
               showNow={false}
               style={{ width: '100%' }}
-              disabledTime={disabledTimeFn}
               onChange={(time) => time && editForm.setFieldValue('startTime', clampTimeToBusinessHours(time, config) ?? time)}
             />
           </Form.Item>

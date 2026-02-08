@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
@@ -6,7 +6,7 @@ import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { getDisabledTime, clampTimeToBusinessHours } from '../../utils/businessHours'
+import { clampTimeToBusinessHours, getDisabledTime } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
@@ -171,24 +171,24 @@ export function InterviewCreatePage() {
     const candidates = form.getFieldValue('candidates') || []
     const startTime = form.getFieldValue('proposedStartTime')
     const interviewDuration = parseInt(config?.interview_duration_minutes || '30')
-    
-    if (startTime && candidates.length > 0) {
-      const [hour, min] = startTime.format('HH:mm').split(':').map(Number)
+    if (!startTime || !dayjs.isDayjs(startTime) || !startTime.isValid() || candidates.length === 0) return
+    const [hour, min] = startTime.format('HH:mm').split(':').map(Number)
       const startMinutes = hour * 60 + min
       const endMinutes = startMinutes + (candidates.length * interviewDuration)
       const endHour = Math.floor(endMinutes / 60)
       const endMin = endMinutes % 60
-      const endTimeStr = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
-      
-      form.setFieldsValue({
-        proposedEndTime: dayjs(endTimeStr, 'HH:mm')
-      })
-    }
+    const endTimeStr = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
+    form.setFieldsValue({
+      proposedEndTime: dayjs(endTimeStr, 'HH:mm')
+    })
   }
 
   const handleSubmit = (values: any) => {
     const proposedDate = (values.proposedDate as Dayjs).format('YYYY-MM-DD')
-    const proposedStartTime = (values.proposedStartTime as Dayjs).format('HH:mm')
+    const startVal = values.proposedStartTime
+    const proposedStartTime = dayjs.isDayjs(startVal) && startVal.isValid()
+      ? startVal.format('HH:mm')
+      : dayjs(startVal, 'HH:mm').format('HH:mm')
     
     // 각 면접자별로 interviewerIds가 있는지 확인
     const candidates = values.candidates.map((c: any) => ({
@@ -231,7 +231,20 @@ export function InterviewCreatePage() {
     })
   }
 
-  const disabledTimeFn = useMemo(() => getDisabledTime(config), [config])
+  // 폼 값 변경 시 시작 시간 보정 및 종료 시간 재계산 (Form이 먼저 값을 반영한 뒤 실행)
+  const handleValuesChange = (changed: any, all: any) => {
+    if ('proposedStartTime' in changed) {
+      const t = all.proposedStartTime
+      if (t && dayjs.isDayjs(t) && t.isValid()) {
+        const clamped = clampTimeToBusinessHours(t, config) ?? t
+        if (!clamped?.isSame(t, 'minute')) {
+          form.setFieldsValue({ proposedStartTime: clamped })
+        }
+      }
+      calculateEndTime()
+    }
+    if ('candidates' in changed) calculateEndTime()
+  }
 
   return (
     <Card title="새 면접 등록">
@@ -239,6 +252,7 @@ export function InterviewCreatePage() {
         form={form}
         layout="vertical"
         onFinish={handleSubmit}
+        onValuesChange={handleValuesChange}
         initialValues={{
           candidates: [{ name: '', email: '', phone: '', positionApplied: '', interviewerIds: [] }],
           proposedStartTime: dayjs().hour(9).minute(0).second(0).millisecond(0),
@@ -283,14 +297,7 @@ export function InterviewCreatePage() {
               minuteStep={30}
               showNow={false}
               style={{ width: '100%' }}
-              disabledTime={disabledTimeFn}
-              onChange={(time) => {
-                const clamped = time ? clampTimeToBusinessHours(time, config) ?? time : null
-                if (clamped) {
-                  form.setFieldsValue({ proposedStartTime: clamped })
-                  calculateEndTime()
-                }
-              }}
+              disabledTime={config ? getDisabledTime(config) : undefined}
             />
           </Form.Item>
 

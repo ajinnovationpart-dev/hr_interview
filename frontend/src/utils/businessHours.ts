@@ -35,33 +35,38 @@ export function getDisabledTime(config?: BusinessHoursConfig | null) {
   const { workStart, workEnd, lunchStart, lunchEnd } = parseConfig(config)
 
   return function disabledTime(_current: Dayjs) {
-    const disabledHours = () => {
-      const hours: number[] = []
+    const workStartHour = Math.floor(workStart / 60)
+    const workEndHour = Math.floor(workEnd / 60)
+    const workEndMin = workEnd % 60
+    const lunchStartHour = Math.floor(lunchStart / 60)
+    const lunchEndHour = Math.floor(lunchEnd / 60)
+
+    const disabledHours = (): number[] => {
+      const list: number[] = []
       for (let h = 0; h < 24; h++) {
-        const minStart = h * 60
-        const minEnd = (h + 1) * 60 - 1
-        const hasAllowedMinute =
-          (minStart < lunchStart && minEnd > workStart) ||   // 오전 업무 [workStart, lunchStart)
-          (minStart < workEnd && minEnd > lunchEnd)         // 오후 업무 [lunchEnd, workEnd)
-        if (!hasAllowedMinute) hours.push(h)
+        if (h < workStartHour) list.push(h)
+        else if (h >= lunchStartHour && h < lunchEndHour) list.push(h)
+        else if (h > workEndHour) list.push(h)
+        else if (h === workEndHour && workEndMin === 0) list.push(h)
       }
-      return hours
+      return list
     }
 
-    const disabledMinutes = (selectedHour: number) => {
-      const minutes: number[] = []
+    const disabledMinutes = (selectedHour: number): number[] => {
+      const list: number[] = []
       const hourStartMin = selectedHour * 60
       for (let m = 0; m < 60; m++) {
         const totalMin = hourStartMin + m
-        const inLunch = totalMin >= lunchStart && totalMin < lunchEnd
-        const beforeWork = totalMin < workStart
-        const afterWork = totalMin >= workEnd
-        if (inLunch || beforeWork || afterWork) minutes.push(m)
+        if (totalMin < workStart) list.push(m)
+        else if (totalMin >= lunchStart && totalMin < lunchEnd) list.push(m)
+        else if (totalMin >= workEnd) list.push(m)
       }
-      return minutes
+      return list
     }
 
-    return { disabledHours, disabledMinutes }
+    const disabledSeconds = (): number[] => []
+
+    return { disabledHours, disabledMinutes, disabledSeconds }
   }
 }
 

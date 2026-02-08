@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
@@ -14,7 +14,7 @@ import {
 } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { getDisabledTime, getDefaultSlotMinutes, clampTimeToBusinessHours } from '../../utils/businessHours'
+import { getDefaultSlotMinutes, clampTimeToBusinessHours } from '../../utils/businessHours'
 
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
@@ -41,7 +41,6 @@ export function ConfirmPage() {
     retry: false,
   })
 
-  const disabledTime = useMemo(() => getDisabledTime(config), [config])
   const defaultSlot = getDefaultSlotMinutes(config)
   const defaultStart = dayjs().hour(Math.floor(defaultSlot.start / 60)).minute(defaultSlot.start % 60).second(0).millisecond(0)
   const defaultEnd = dayjs().hour(Math.floor(defaultSlot.end / 60)).minute(defaultSlot.end % 60).second(0).millisecond(0)
@@ -140,7 +139,6 @@ export function ConfirmPage() {
                   <TimePicker
                     value={clampTimeToBusinessHours(slot.startTime, config) ?? slot.startTime}
                     format="HH:mm"
-                    disabledTime={disabledTime}
                     minuteStep={30}
                     showNow={false}
                     changeOnScroll
@@ -150,7 +148,6 @@ export function ConfirmPage() {
                   <TimePicker
                     value={clampTimeToBusinessHours(slot.endTime, config) ?? slot.endTime}
                     format="HH:mm"
-                    disabledTime={disabledTime}
                     minuteStep={30}
                     showNow={false}
                     changeOnScroll
