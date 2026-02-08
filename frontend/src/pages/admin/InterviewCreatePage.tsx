@@ -172,14 +172,14 @@ export function InterviewCreatePage() {
     const startTime = form.getFieldValue('proposedStartTime')
     const interviewDuration = parseInt(config?.interview_duration_minutes || '30')
     if (!startTime || !dayjs.isDayjs(startTime) || !startTime.isValid() || candidates.length === 0) return
-    const [hour, min] = startTime.format('HH:mm').split(':').map(Number)
-      const startMinutes = hour * 60 + min
-      const endMinutes = startMinutes + (candidates.length * interviewDuration)
-      const endHour = Math.floor(endMinutes / 60)
-      const endMin = endMinutes % 60
-    const endTimeStr = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
+    const hour = startTime.hour()
+    const min = startTime.minute()
+    const startMinutes = hour * 60 + min
+    const endMinutes = startMinutes + (candidates.length * interviewDuration)
+    const endHour = Math.floor(endMinutes / 60)
+    const endMin = endMinutes % 60
     form.setFieldsValue({
-      proposedEndTime: dayjs(endTimeStr, 'HH:mm')
+      proposedEndTime: dayjs().hour(endHour).minute(endMin).second(0).millisecond(0)
     })
   }
 
@@ -187,8 +187,11 @@ export function InterviewCreatePage() {
     const proposedDate = (values.proposedDate as Dayjs).format('YYYY-MM-DD')
     const startVal = values.proposedStartTime
     const proposedStartTime = dayjs.isDayjs(startVal) && startVal.isValid()
-      ? startVal.format('HH:mm')
-      : dayjs(startVal, 'HH:mm').format('HH:mm')
+      ? `${String(startVal.hour()).padStart(2, '0')}:${String(startVal.minute()).padStart(2, '0')}`
+      : (() => {
+          const d = dayjs(startVal, 'HH:mm')
+          return d.isValid() ? `${String(d.hour()).padStart(2, '0')}:${String(d.minute()).padStart(2, '0')}` : '09:00'
+        })()
     
     // 각 면접자별로 interviewerIds가 있는지 확인
     const candidates = values.candidates.map((c: any) => ({
@@ -293,7 +296,8 @@ export function InterviewCreatePage() {
             rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}
           >
             <TimePicker 
-              format="HH:mm" 
+              format="HH:mm"
+              use12Hours={false}
               minuteStep={30}
               showNow={false}
               style={{ width: '100%' }}
@@ -305,7 +309,8 @@ export function InterviewCreatePage() {
             name="proposedEndTime"
           >
             <TimePicker 
-              format="HH:mm" 
+              format="HH:mm"
+              use12Hours={false}
               disabled
               style={{ width: '100%' }}
             />
