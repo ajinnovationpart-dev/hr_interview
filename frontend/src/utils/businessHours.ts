@@ -30,16 +30,22 @@ function parseConfig(config?: BusinessHoursConfig | null) {
 /**
  * Ant Design TimePicker용 disabledTime.
  * 업무시간(점심 제외)만 선택 가능하도록 비활성화할 시간/분을 반환합니다.
+ * 설정 오류로 선택 가능한 시간이 없으면 비활성화 없음(전체 선택 가능)을 반환합니다.
  */
 export function getDisabledTime(config?: BusinessHoursConfig | null) {
   const { workStart, workEnd, lunchStart, lunchEnd } = parseConfig(config)
+  const workStartHour = Math.floor(workStart / 60)
+  const workEndHour = Math.floor(workEnd / 60)
+  const workEndMin = workEnd % 60
+  const lunchStartHour = Math.floor(lunchStart / 60)
+  const lunchEndHour = Math.floor(lunchEnd / 60)
+
+  // 선택 가능한 시간이 하나도 없으면 제한 없음(딤 처리 안 함)
+  const wouldDisableAllHours = workEnd <= workStart
+  const noRestriction = () => ({ disabledHours: () => [], disabledMinutes: () => [], disabledSeconds: () => [] })
 
   return function disabledTime(_current: Dayjs) {
-    const workStartHour = Math.floor(workStart / 60)
-    const workEndHour = Math.floor(workEnd / 60)
-    const workEndMin = workEnd % 60
-    const lunchStartHour = Math.floor(lunchStart / 60)
-    const lunchEndHour = Math.floor(lunchEnd / 60)
+    if (wouldDisableAllHours) return noRestriction()
 
     const disabledHours = (): number[] => {
       const list: number[] = []
@@ -49,6 +55,7 @@ export function getDisabledTime(config?: BusinessHoursConfig | null) {
         else if (h > workEndHour) list.push(h)
         else if (h === workEndHour && workEndMin === 0) list.push(h)
       }
+      if (list.length >= 24) return []
       return list
     }
 

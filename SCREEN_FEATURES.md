@@ -56,7 +56,7 @@
   - **1. 공고 정보**: 공고명, 팀명 입력
   - **2. 면접 일시**
     - 제안 날짜 (DatePicker)
-    - 시작 시간 (TimePicker, 업무시간만 선택 가능, 30분 단위)
+    - 시작 시간 (TimePicker, 30분 단위, 모든 시간 선택 가능·변경 시 업무시간으로 보정)
     - 종료 시간: 면접자 수 × 30분으로 자동 계산 (읽기 전용)
   - **3. 면접자 및 담당 면접관**
     - 면접자 추가/삭제
@@ -64,6 +64,13 @@
     - 면접관은 부서별 그룹·검색(이름/부서/직책/이메일) 지원
   - **저장 및 메일 발송**: 면접 생성 후 담당 면접관에게 메일 발송, 이력서 업로드 처리
   - 취소 시 대시보드로 이동
+
+- **면접 등록 후 면접관 메일 발송 (백엔드 검증)**
+  - `POST /api/a/interviews` 처리 시, 등록된 모든 담당 면접관(중복 제거)에게 **일정 확인 링크가 포함된 초대 메일**을 1인 1통 발송합니다.
+  - 발송 조건: 면접관 `is_active`, 이메일 존재, 이메일 형식 유효. 중복 이메일은 1통만 발송.
+  - 메일 내용: `EmailTemplateService.generateInterviewerInvitation()` (공고명, 팀명, 제안 일시, 담당 면접자, `/confirm/:token` 링크).
+  - 응답: `data.emailsSent`, `data.totalInterviewers`, `message`(발송 결과 문구). 한 명도 발송되지 않으면 SMTP 설정 확인 안내 문구가 message에 포함됩니다.
+  - SMTP: `email.service.ts` (nodemailer), 설정은 `.env`(SMTP_HOST, SMTP_USER, SMTP_PASSWORD 등) 및 관리자 설정 화면(발신 이메일/이름 등)에서 로드됩니다.
 
 ### 2.4 면접 상세 (InterviewDetailPage)
 - **경로**: `/admin/interviews/:id`
