@@ -6,7 +6,6 @@ import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
-import { clampTimeToBusinessHours } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
@@ -36,12 +35,6 @@ function StartTimeSelect({
   const rawMinute = value && value.isValid() ? value.minute() : 0
   const minute = normalizeMinute(rawMinute)
   const hour = rawHour >= 0 && rawHour <= 23 ? rawHour : 9
-  const didNormalize = React.useRef(false)
-  React.useEffect(() => {
-    if (didNormalize.current || !value?.isValid() || (rawMinute === minute && rawHour === hour)) return
-    didNormalize.current = true
-    onChange?.(timeOnlyDayjs(hour, minute))
-  }, [value, rawMinute, rawHour, minute, hour, onChange])
   const update = (h: number, m: number) => {
     onChange?.(timeOnlyDayjs(h, m))
   }
@@ -290,34 +283,11 @@ export function InterviewCreatePage() {
     })
   }
 
-  /** 로케일 버그: hour=0, minute=1~23 이면 시/분이 바뀌어 들어온 것으로 보정 (15시 → 00:15 방지) */
-  const normalizeStartTime = (t: Dayjs): Dayjs => {
-    const hour = t.hour()
-    const minute = t.minute()
-    if (hour === 0 && minute >= 1 && minute <= 23) {
-      return t.hour(minute).minute(0).second(0).millisecond(0)
-    }
-    return t
-  }
-
-  // 폼 값 변경 시 시작 시간 보정 및 종료 시간 재계산 (Form이 먼저 값을 반영한 뒤 실행)
-  const handleValuesChange = (changed: any, all: any) => {
-    if ('proposedStartTime' in changed) {
-      const t = all.proposedStartTime
-      if (t && dayjs.isDayjs(t) && t.isValid()) {
-        const normalized = normalizeStartTime(t)
-        if (!normalized.isSame(t, 'minute')) {
-          form.setFieldsValue({ proposedStartTime: normalized })
-        } else {
-          const clamped = clampTimeToBusinessHours(t, config) ?? t
-          if (!clamped?.isSame(t, 'minute')) {
-            form.setFieldsValue({ proposedStartTime: clamped })
-          }
-        }
-      }
+  // 폼 값 변경 시 종료 시간만 재계산 (시작 시간은 사용자 선택 그대로 유지)
+  const handleValuesChange = (changed: any) => {
+    if ('proposedStartTime' in changed || 'candidates' in changed) {
       calculateEndTime()
     }
-    if ('candidates' in changed) calculateEndTime()
   }
 
   return (
