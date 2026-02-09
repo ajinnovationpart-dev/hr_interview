@@ -10,6 +10,40 @@ import { clampTimeToBusinessHours } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
+/** Form.Item이 주입한 onChange를 timeString 기준으로 덮어써, 로케일 버그로 시/분이 뒤바뀌는 문제를 방지 */
+function StartTimePicker({
+  value,
+  onChange,
+  ...rest
+}: React.ComponentProps<typeof TimePicker>) {
+  return (
+    <TimePicker
+      {...rest}
+      value={value}
+      format="HH:mm"
+      use12Hours={false}
+      minuteStep={30}
+      showNow={false}
+      style={{ width: '100%' }}
+      onChange={(val: Dayjs | null, timeString: string | string[]) => {
+        const str = Array.isArray(timeString) ? timeString[0] : timeString
+        if (str && typeof str === 'string') {
+          const parts = str.trim().split(':')
+          const h = parseInt(parts[0], 10)
+          const m = parseInt(parts[1], 10)
+          if (!Number.isNaN(h) && !Number.isNaN(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+            const fixed = dayjs().hour(h).minute(m).second(0).millisecond(0)
+            // Form이 잘못된 값을 먼저 넣을 수 있으므로 다음 틱에 올바른 값으로 덮어씀
+            setTimeout(() => onChange?.(fixed), 0)
+            return
+          }
+        }
+        setTimeout(() => onChange?.(val ?? undefined), 0)
+      }}
+    />
+  )
+}
+
 export function InterviewCreatePage() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
@@ -234,14 +268,29 @@ export function InterviewCreatePage() {
     })
   }
 
+  /** 로케일 버그: hour=0, minute=1~23 이면 시/분이 바뀌어 들어온 것으로 보정 (15시 → 00:15 방지) */
+  const normalizeStartTime = (t: Dayjs): Dayjs => {
+    const hour = t.hour()
+    const minute = t.minute()
+    if (hour === 0 && minute >= 1 && minute <= 23) {
+      return t.hour(minute).minute(0).second(0).millisecond(0)
+    }
+    return t
+  }
+
   // 폼 값 변경 시 시작 시간 보정 및 종료 시간 재계산 (Form이 먼저 값을 반영한 뒤 실행)
   const handleValuesChange = (changed: any, all: any) => {
     if ('proposedStartTime' in changed) {
       const t = all.proposedStartTime
       if (t && dayjs.isDayjs(t) && t.isValid()) {
-        const clamped = clampTimeToBusinessHours(t, config) ?? t
-        if (!clamped?.isSame(t, 'minute')) {
-          form.setFieldsValue({ proposedStartTime: clamped })
+        const normalized = normalizeStartTime(t)
+        if (!normalized.isSame(t, 'minute')) {
+          form.setFieldsValue({ proposedStartTime: normalized })
+        } else {
+          const clamped = clampTimeToBusinessHours(t, config) ?? t
+          if (!clamped?.isSame(t, 'minute')) {
+            form.setFieldsValue({ proposedStartTime: clamped })
+          }
         }
       }
       calculateEndTime()
@@ -295,13 +344,7 @@ export function InterviewCreatePage() {
             name="proposedStartTime"
             rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}
           >
-            <TimePicker 
-              format="HH:mm"
-              use12Hours={false}
-              minuteStep={30}
-              showNow={false}
-              style={{ width: '100%' }}
-            />
+            <StartTimePicker />
           </Form.Item>
 
           <Form.Item
