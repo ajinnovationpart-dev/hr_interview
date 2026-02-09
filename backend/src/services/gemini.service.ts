@@ -160,6 +160,40 @@ Output format (JSON array):
   isGeminiAvailable(): boolean {
     return this.isAvailable;
   }
+
+  /**
+   * 자연어 질문에 대한 답변 생성 (챗봇)
+   * @param systemContext 역할별로 준비된 데이터 요약(면접 목록, 내 일정 등)
+   * @param userMessage 사용자 질문
+   */
+  async chat(systemContext: string, userMessage: string): Promise<string> {
+    if (!this.isAvailable || !this.genAI) {
+      return 'AI 서비스가 설정되지 않았습니다. GEMINI_API_KEY를 확인해 주세요.';
+    }
+
+    try {
+      const prompt = `당신은 AJ Networks 면접/채용 시스템의 도우미 챗봇입니다.
+아래 [참고 데이터]만 사용해서 질문에 친절하고 간결하게 답변하세요. 데이터에 없는 내용은 "해당 정보가 없습니다" 등으로 답하고 추측하지 마세요.
+
+[참고 데이터]
+${systemContext}
+
+[사용자 질문]
+${userMessage}
+
+[답변] (한국어, 요점 정리, 불릿 가능):`;
+
+      const model = this.genAI.getGenerativeModel({
+        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      });
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text()?.trim() || '답변을 생성하지 못했습니다.';
+    } catch (error: any) {
+      logger.error('Gemini chat error:', error);
+      return `일시적인 오류가 발생했습니다. (${error?.message || 'Unknown error'})`;
+    }
+  }
 }
 
 export const geminiService = new GeminiService();

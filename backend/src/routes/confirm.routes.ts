@@ -5,6 +5,7 @@ import { AppError } from '../middlewares/errorHandler';
 import { dataService } from '../services/dataService';
 import { emailService } from '../services/email.service';
 import { commonSlotService } from '../services/commonSlot.service';
+import { checkInterviewerHasSchedule } from '../services/interviewerScheduleCheck.service';
 import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
 
@@ -24,6 +25,7 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
   try {
     const user = req.user!;
     const interviewId = user.interviewId!;
+    const interviewerId = user.interviewerId;
 
     const interview = await dataService.getInterviewById(interviewId);
     if (!interview) {
@@ -51,6 +53,24 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
     const proposedStartTime = dayjs(interview.start_datetime).format('HH:mm');
     const proposedEndTime = dayjs(interview.end_datetime).format('HH:mm');
 
+    // 면접관 일정 조회 API: 해당 기간에 일정 있으면 일정 선택 불가
+    let externalScheduleExists = false;
+    if (interviewerId) {
+      const interviewer = await dataService.getInterviewerById(interviewerId);
+      const email = interviewer?.email;
+      if (email) {
+        try {
+          externalScheduleExists = await checkInterviewerHasSchedule(
+            proposedDate,
+            proposedDate,
+            email
+          );
+        } catch (e) {
+          logger.warn('Interviewer schedule check failed', { error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -64,6 +84,7 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
           endTime: proposedEndTime,
         },
         responseStatus,
+        externalScheduleExists,
       },
     });
   } catch (error) {
@@ -92,6 +113,16 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
     // 이미 확정된 면접인지 확인
     if (interview.status === 'CONFIRMED') {
       throw new AppError(400, '이미 확정된 면접입니다');
+    }
+
+    // 면접관 일정 조회 API: 해당 기간에 일정 있으면 제출 불가
+    const proposedDate = dayjs(interview.start_datetime).format('YYYY-MM-DD');
+    const interviewer = await dataService.getInterviewerById(interviewerId);
+    if (interviewer?.email) {
+      const externalScheduleExists = await checkInterviewerHasSchedule(proposedDate, proposedDate, interviewer.email);
+      if (externalScheduleExists) {
+        throw new AppError(400, '해당 기간에 이미 일정이 있어 일정 선택을 할 수 없습니다');
+      }
     }
 
     // 시간 선택 저장

@@ -1,5 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ChatBot } from './components/ChatBot'
 import { AdminLayout } from './layouts/AdminLayout'
 import { DashboardPage } from './pages/admin/DashboardPage'
 import { InterviewListPage } from './pages/admin/InterviewListPage'
@@ -83,6 +84,7 @@ function App() {
 
         <Route path="/" element={<Navigate to="/auth/login" replace />} />
       </Routes>
+      <ChatBot />
     </BrowserRouter>
   )
 }

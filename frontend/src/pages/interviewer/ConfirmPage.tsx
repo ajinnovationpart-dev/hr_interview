@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
+  Alert,
   Card,
   DatePicker,
   TimePicker,
@@ -129,12 +130,22 @@ export function ConfirmPage() {
 
         <Card title="가능한 일정 선택">
           <Space direction="vertical" style={{ width: '100%' }}>
+            {data.externalScheduleExists && (
+              <Alert
+                type="warning"
+                showIcon
+                message="해당 기간에 이미 일정이 있어 일정 선택을 할 수 없습니다."
+                description="다른 일정이 등록된 상태입니다. 관리자에게 문의해 주세요."
+                style={{ marginBottom: 16 }}
+              />
+            )}
             {selectedSlots.map((slot, index) => (
               <Card key={index} size="small">
                 <Space>
                   <DatePicker
                     value={slot.date}
                     onChange={(date) => date && handleUpdateSlot(index, 'date', date)}
+                    disabled={data.externalScheduleExists}
                   />
                   <TimePicker
                     value={clampTimeToBusinessHours(slot.startTime, config) ?? slot.startTime}
@@ -143,6 +154,7 @@ export function ConfirmPage() {
                     showNow={false}
                     changeOnScroll
                     onChange={(time) => time && handleUpdateSlot(index, 'startTime', clampTimeToBusinessHours(time, config) ?? time)}
+                    disabled={data.externalScheduleExists}
                   />
                   <span>~</span>
                   <TimePicker
@@ -152,15 +164,16 @@ export function ConfirmPage() {
                     showNow={false}
                     changeOnScroll
                     onChange={(time) => time && handleUpdateSlot(index, 'endTime', clampTimeToBusinessHours(time, config) ?? time)}
+                    disabled={data.externalScheduleExists}
                   />
-                  <Button danger onClick={() => handleRemoveSlot(index)}>
+                  <Button danger onClick={() => handleRemoveSlot(index)} disabled={data.externalScheduleExists}>
                     삭제
                   </Button>
                 </Space>
               </Card>
             ))}
 
-            <Button type="dashed" onClick={handleAddSlot} block>
+            <Button type="dashed" onClick={handleAddSlot} block disabled={data.externalScheduleExists}>
               시간대 추가
             </Button>
 
@@ -170,6 +183,7 @@ export function ConfirmPage() {
               loading={mutation.isPending}
               block
               size="large"
+              disabled={data.externalScheduleExists}
               style={{ 
                 minHeight: '48px',
                 fontSize: '16px',

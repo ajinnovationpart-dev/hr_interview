@@ -21,6 +21,7 @@ import { candidatesRouter } from './routes/candidates.routes';
 import { exportRouter } from './routes/export.routes';
 import { interviewerPortalRouter } from './routes/interviewer-portal.routes';
 import { resumeRouter } from './routes/resume.routes';
+import { chatRouter } from './routes/chat.routes';
 import { schedulerService } from './services/scheduler.service';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 
@@ -136,6 +137,7 @@ app.use('/api/candidates', candidatesRouter);
 app.use('/api/export', exportRouter);
 app.use('/api/interviewer-portal', interviewerPortalRouter); // 면접관 전용 포털
 app.use('/api/resumes', resumeRouter); // 이력서 업로드/다운로드
+app.use('/api/chat', chatRouter);
 app.use('/api', testEmailRouter); // 테스트 메일 라우트
 
 // /api/a/* 경로 동일 라우트 (프론트 apiA baseURL이 /api/a 일 때 단일 서버에서 동작)
@@ -156,6 +158,7 @@ app.use('/api/a/candidates', candidatesRouter);
 app.use('/api/a/export', exportRouter);
 app.use('/api/a/interviewer-portal', interviewerPortalRouter);
 app.use('/api/a/resumes', resumeRouter);
+app.use('/api/a/chat', chatRouter);
 app.use('/api/a', testEmailRouter); // GET /api/a/test-email/status, POST /api/a/test-email
 
 // A Backend 프록시 설정 전에 OPTIONS 요청 처리

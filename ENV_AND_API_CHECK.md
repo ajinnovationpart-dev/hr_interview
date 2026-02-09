@@ -24,6 +24,18 @@
   - `SHAREPOINT_ENABLED=true` 등 SharePoint 관련 변수 설정  
   - 평가/이력서 등 추가 기능은 스토리지별 구현 여부 확인 필요.
 
+### 챗봇 (Gemini, 선택)
+
+- **`GEMINI_API_KEY`**  
+  - 메인 화면 챗봇(면접/일정 질의응답)에 사용. 미설정 시 챗봇에서 "AI 서비스가 설정되지 않았습니다" 안내.
+
+### 면접관 일정 조회 (Power Automate, 선택)
+
+- **`INTERVIEWER_SCHEDULE_CHECK_URL`**  
+  - 면접관 일정 조회 API URL (Power Automate HTTP 트리거 등).  
+  - 설정 시: 면접 일정 확인 페이지에서 해당 기간에 일정이 있으면 일정 선택 불가.  
+  - 미설정 시: 일정 조회 없이 항상 선택 가능.
+
 ## 2. 프론트엔드 API URL
 
 - **개발 (VITE_API_URL 미설정)**  
