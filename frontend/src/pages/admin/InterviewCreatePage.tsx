@@ -15,7 +15,9 @@ function StartTimePicker({
   value,
   onChange,
   ...rest
-}: React.ComponentProps<typeof TimePicker>) {
+}: Omit<React.ComponentProps<typeof TimePicker>, 'onChange'> & {
+  onChange?: (value: Dayjs | null, timeString?: string) => void
+}) {
   return (
     <TimePicker
       {...rest}
@@ -33,12 +35,13 @@ function StartTimePicker({
           const m = parseInt(parts[1], 10)
           if (!Number.isNaN(h) && !Number.isNaN(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
             const fixed = dayjs().hour(h).minute(m).second(0).millisecond(0)
-            // Form이 잘못된 값을 먼저 넣을 수 있으므로 다음 틱에 올바른 값으로 덮어씀
-            setTimeout(() => onChange?.(fixed), 0)
+            setTimeout(() => onChange?.(fixed, str), 0)
             return
           }
         }
-        setTimeout(() => onChange?.(val ?? undefined), 0)
+        const nextVal: Dayjs | null = val ?? null
+        const timeStr = nextVal ? nextVal.format('HH:mm') : ''
+        setTimeout(() => onChange?.(nextVal, timeStr), 0)
       }}
     />
   )
