@@ -87,8 +87,18 @@ function App() {
   )
 }
 
+const HYDRATE_WAIT_MS = 400
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, _hasHydrated } = useAuthStore()
+
+  React.useEffect(() => {
+    if (_hasHydrated) return
+    const t = window.setTimeout(() => {
+      useAuthStore.getState().setHasHydrated(true)
+    }, HYDRATE_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [_hasHydrated])
 
   if (!_hasHydrated) {
     return (
@@ -106,6 +116,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function ProtectedInterviewerRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, _hasHydrated } = useAuthStore()
+
+  React.useEffect(() => {
+    if (_hasHydrated) return
+    const t = window.setTimeout(() => {
+      useAuthStore.getState().setHasHydrated(true)
+    }, HYDRATE_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [_hasHydrated])
 
   if (!_hasHydrated) {
     return (
