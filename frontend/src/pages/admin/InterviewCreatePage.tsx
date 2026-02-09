@@ -23,38 +23,45 @@ function timeOnlyDayjs(hour: number, minute: number): Dayjs {
   return dayjs().startOf('day').hour(hour).minute(minute).second(0).millisecond(0)
 }
 
-/** 시/분을 각각 Select로 선택 (TimePicker 로케일 버그 회피) */
+/** 시/분 Select (부모가 hour, minute state로 제어 — Form과 꼬이지 않도록) */
 function StartTimeSelect({
-  value,
+  hour,
+  minute,
   onChange,
 }: {
-  value?: Dayjs | null
-  onChange?: (v: Dayjs | null) => void
+  hour: number
+  minute: number
+  onChange: (hour: number, minute: number) => void
 }) {
-  const rawHour = value && value.isValid() ? value.hour() : 9
-  const rawMinute = value && value.isValid() ? value.minute() : 0
-  const minute = normalizeMinute(rawMinute)
-  const hour = rawHour >= 0 && rawHour <= 23 ? rawHour : 9
-  const update = (h: number, m: number) => {
-    onChange?.(timeOnlyDayjs(h, m))
-  }
+  const safeHour = hour >= 0 && hour <= 23 ? hour : 9
+  const safeMinute = minute === 0 || minute === 30 ? minute : 0
   return (
     <Space.Compact style={{ width: '100%' }}>
       <Select
         style={{ width: '50%' }}
         placeholder="시"
-        value={hour}
+        value={safeHour}
         options={HOUR_OPTIONS}
-        onChange={(h) => update(h, minute)}
+        onChange={(h) => onChange(h, safeMinute)}
       />
       <Select
         style={{ width: '50%' }}
         placeholder="분"
-        value={minute}
+        value={safeMinute}
         options={MINUTE_OPTIONS}
-        onChange={(m) => update(hour, m)}
+        onChange={(m) => onChange(safeHour, m)}
       />
     </Space.Compact>
+  )
+}
+
+function EndTimeDisplay({ value }: { value?: dayjs.Dayjs }) {
+  return (
+    <Input
+      readOnly
+      style={{ width: '100%' }}
+      value={value && dayjs.isDayjs(value) ? value.format('HH:mm') : '--:--'}
+    />
   )
 }
 
@@ -62,7 +69,15 @@ export function InterviewCreatePage() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
   const [resumeFiles, setResumeFiles] = React.useState<Record<number, UploadFile[]>>({})
-  const proposedEndTime = Form.useWatch('proposedEndTime', form)
+  const [startHour, setStartHour] = React.useState(9)
+  const [startMinute, setStartMinute] = React.useState(0)
+
+  // 시작 시간 변경 시 폼 반영
+  const handleStartTimeChange = (hour: number, minute: number) => {
+    setStartHour(hour)
+    setStartMinute(minute)
+    form.setFieldsValue({ proposedStartTime: timeOnlyDayjs(hour, minute) })
+  }
 
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
@@ -234,13 +249,8 @@ export function InterviewCreatePage() {
 
   const handleSubmit = (values: any) => {
     const proposedDate = (values.proposedDate as Dayjs).format('YYYY-MM-DD')
-    const startVal = values.proposedStartTime
-    let h = 9, m = 0
-    if (dayjs.isDayjs(startVal) && startVal.isValid()) {
-      h = startVal.hour()
-      m = normalizeMinute(startVal.minute())
-    }
-    const proposedStartTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    // 시작 시간은 state 기준으로 전송 (Form과 꼬이지 않도록)
+    const proposedStartTime = `${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}`
     
     // 각 면접자별로 interviewerIds가 있는지 확인
     const candidates = values.candidates.map((c: any) => ({
@@ -290,6 +300,12 @@ export function InterviewCreatePage() {
     }
   }
 
+  // 시작 시간(state)이 바뀌면 폼 반영 + 종료 시간 재계산
+  React.useEffect(() => {
+    form.setFieldsValue({ proposedStartTime: timeOnlyDayjs(startHour, startMinute) })
+    calculateEndTime()
+  }, [startHour, startMinute])
+
   return (
     <Card title="새 면접 등록">
       <Form
@@ -299,7 +315,6 @@ export function InterviewCreatePage() {
         onValuesChange={handleValuesChange}
         initialValues={{
           candidates: [{ name: '', email: '', phone: '', positionApplied: '', interviewerIds: [] }],
-          proposedStartTime: timeOnlyDayjs(9, 0),
         }}
       >
         <Title level={4}>1. 공고 정보</Title>
@@ -331,23 +346,19 @@ export function InterviewCreatePage() {
         </Form.Item>
 
         <Space style={{ width: '100%' }} size="large">
-          <Form.Item
-            label="시작 시간"
-            name="proposedStartTime"
-            rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}
-          >
-            <StartTimeSelect />
+          <Form.Item label="시작 시간" required rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}>
+            <StartTimeSelect
+              hour={startHour}
+              minute={startMinute}
+              onChange={handleStartTimeChange}
+            />
+          </Form.Item>
+          <Form.Item name="proposedStartTime" initialValue={timeOnlyDayjs(9, 0)} noStyle>
+            <></>
           </Form.Item>
 
-          <Form.Item
-            label="종료 시간 (자동 계산)"
-            name="proposedEndTime"
-          >
-            <Input
-              readOnly
-              style={{ width: '100%' }}
-              value={proposedEndTime && dayjs.isDayjs(proposedEndTime) ? proposedEndTime.format('HH:mm') : '--:--'}
-            />
+          <Form.Item label="종료 시간 (자동 계산)" name="proposedEndTime">
+            <EndTimeDisplay />
           </Form.Item>
         </Space>
         
