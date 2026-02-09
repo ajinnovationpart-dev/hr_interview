@@ -10,40 +10,40 @@ import { clampTimeToBusinessHours } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
-/** Form.Item이 주입한 onChange를 timeString 기준으로 덮어써, 로케일 버그로 시/분이 뒤바뀌는 문제를 방지 */
-function StartTimePicker({
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ label: `${i}시`, value: i }))
+const MINUTE_OPTIONS = [0, 30].map((m) => ({ label: `${m}분`, value: m }))
+
+/** 시/분을 각각 Select로 선택 (TimePicker 로케일 버그 회피) */
+function StartTimeSelect({
   value,
   onChange,
-  ...rest
-}: Omit<React.ComponentProps<typeof TimePicker>, 'onChange'> & {
-  onChange?: (value: Dayjs | null, timeString?: string) => void
+}: {
+  value?: Dayjs | null
+  onChange?: (v: Dayjs | null) => void
 }) {
+  const hour = value && value.isValid() ? value.hour() : 9
+  const minute = value && value.isValid() ? value.minute() : 0
+  const update = (h: number, m: number) => {
+    const next = dayjs().hour(h).minute(m).second(0).millisecond(0)
+    onChange?.(next)
+  }
   return (
-    <TimePicker
-      {...rest}
-      value={value}
-      format="HH:mm"
-      use12Hours={false}
-      minuteStep={30}
-      showNow={false}
-      style={{ width: '100%' }}
-      onChange={(val: Dayjs | null, timeString: string | string[]) => {
-        const str = Array.isArray(timeString) ? timeString[0] : timeString
-        if (str && typeof str === 'string') {
-          const parts = str.trim().split(':')
-          const h = parseInt(parts[0], 10)
-          const m = parseInt(parts[1], 10)
-          if (!Number.isNaN(h) && !Number.isNaN(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
-            const fixed = dayjs().hour(h).minute(m).second(0).millisecond(0)
-            setTimeout(() => onChange?.(fixed, str), 0)
-            return
-          }
-        }
-        const nextVal: Dayjs | null = val ?? null
-        const timeStr = nextVal ? nextVal.format('HH:mm') : ''
-        setTimeout(() => onChange?.(nextVal, timeStr), 0)
-      }}
-    />
+    <Space.Compact style={{ width: '100%' }}>
+      <Select
+        style={{ width: '50%' }}
+        placeholder="시"
+        value={hour}
+        options={HOUR_OPTIONS}
+        onChange={(h) => update(h, minute)}
+      />
+      <Select
+        style={{ width: '50%' }}
+        placeholder="분"
+        value={minute}
+        options={MINUTE_OPTIONS}
+        onChange={(m) => update(hour, m)}
+      />
+    </Space.Compact>
   )
 }
 
@@ -347,7 +347,7 @@ export function InterviewCreatePage() {
             name="proposedStartTime"
             rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}
           >
-            <StartTimePicker />
+            <StartTimeSelect />
           </Form.Item>
 
           <Form.Item
