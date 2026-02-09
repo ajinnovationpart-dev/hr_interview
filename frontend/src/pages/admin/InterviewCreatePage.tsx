@@ -1,6 +1,6 @@
 import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
+import { Form, Input, DatePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
 import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
@@ -13,6 +13,17 @@ const { Text, Title } = Typography
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ label: `${i}시`, value: i }))
 const MINUTE_OPTIONS = [0, 30].map((m) => ({ label: `${m}분`, value: m }))
 
+/** 분을 0 또는 30으로 맞춤 (이전 값/버그로 32분 등이 들어온 경우) */
+function normalizeMinute(m: number): number {
+  if (m === 0 || m === 30) return m
+  return m < 15 ? 0 : 30
+}
+
+/** 시/분만 쓰는 Dayjs 생성 (날짜는 당일 00:00 기준으로 통일) */
+function timeOnlyDayjs(hour: number, minute: number): Dayjs {
+  return dayjs().startOf('day').hour(hour).minute(minute).second(0).millisecond(0)
+}
+
 /** 시/분을 각각 Select로 선택 (TimePicker 로케일 버그 회피) */
 function StartTimeSelect({
   value,
@@ -21,11 +32,18 @@ function StartTimeSelect({
   value?: Dayjs | null
   onChange?: (v: Dayjs | null) => void
 }) {
-  const hour = value && value.isValid() ? value.hour() : 9
-  const minute = value && value.isValid() ? value.minute() : 0
+  const rawHour = value && value.isValid() ? value.hour() : 9
+  const rawMinute = value && value.isValid() ? value.minute() : 0
+  const minute = normalizeMinute(rawMinute)
+  const hour = rawHour >= 0 && rawHour <= 23 ? rawHour : 9
+  const didNormalize = React.useRef(false)
+  React.useEffect(() => {
+    if (didNormalize.current || !value?.isValid() || (rawMinute === minute && rawHour === hour)) return
+    didNormalize.current = true
+    onChange?.(timeOnlyDayjs(hour, minute))
+  }, [value, rawMinute, rawHour, minute, hour, onChange])
   const update = (h: number, m: number) => {
-    const next = dayjs().hour(h).minute(m).second(0).millisecond(0)
-    onChange?.(next)
+    onChange?.(timeOnlyDayjs(h, m))
   }
   return (
     <Space.Compact style={{ width: '100%' }}>
@@ -51,6 +69,7 @@ export function InterviewCreatePage() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
   const [resumeFiles, setResumeFiles] = React.useState<Record<number, UploadFile[]>>({})
+  const proposedEndTime = Form.useWatch('proposedEndTime', form)
 
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
@@ -203,32 +222,32 @@ export function InterviewCreatePage() {
     },
   })
 
-  // 종료 시간 자동 계산
+  // 종료 시간 자동 계산 (시작 시간 분은 0/30으로 정규화해 사용)
   const calculateEndTime = () => {
     const candidates = form.getFieldValue('candidates') || []
     const startTime = form.getFieldValue('proposedStartTime')
     const interviewDuration = parseInt(config?.interview_duration_minutes || '30')
     if (!startTime || !dayjs.isDayjs(startTime) || !startTime.isValid() || candidates.length === 0) return
     const hour = startTime.hour()
-    const min = startTime.minute()
+    const min = normalizeMinute(startTime.minute())
     const startMinutes = hour * 60 + min
     const endMinutes = startMinutes + (candidates.length * interviewDuration)
     const endHour = Math.floor(endMinutes / 60)
     const endMin = endMinutes % 60
     form.setFieldsValue({
-      proposedEndTime: dayjs().hour(endHour).minute(endMin).second(0).millisecond(0)
+      proposedEndTime: timeOnlyDayjs(endHour, endMin)
     })
   }
 
   const handleSubmit = (values: any) => {
     const proposedDate = (values.proposedDate as Dayjs).format('YYYY-MM-DD')
     const startVal = values.proposedStartTime
-    const proposedStartTime = dayjs.isDayjs(startVal) && startVal.isValid()
-      ? `${String(startVal.hour()).padStart(2, '0')}:${String(startVal.minute()).padStart(2, '0')}`
-      : (() => {
-          const d = dayjs(startVal, 'HH:mm')
-          return d.isValid() ? `${String(d.hour()).padStart(2, '0')}:${String(d.minute()).padStart(2, '0')}` : '09:00'
-        })()
+    let h = 9, m = 0
+    if (dayjs.isDayjs(startVal) && startVal.isValid()) {
+      h = startVal.hour()
+      m = normalizeMinute(startVal.minute())
+    }
+    const proposedStartTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
     
     // 각 면접자별로 interviewerIds가 있는지 확인
     const candidates = values.candidates.map((c: any) => ({
@@ -310,7 +329,7 @@ export function InterviewCreatePage() {
         onValuesChange={handleValuesChange}
         initialValues={{
           candidates: [{ name: '', email: '', phone: '', positionApplied: '', interviewerIds: [] }],
-          proposedStartTime: dayjs().hour(9).minute(0).second(0).millisecond(0),
+          proposedStartTime: timeOnlyDayjs(9, 0),
         }}
       >
         <Title level={4}>1. 공고 정보</Title>
@@ -354,11 +373,10 @@ export function InterviewCreatePage() {
             label="종료 시간 (자동 계산)"
             name="proposedEndTime"
           >
-            <TimePicker 
-              format="HH:mm"
-              use12Hours={false}
-              disabled
+            <Input
+              readOnly
               style={{ width: '100%' }}
+              value={proposedEndTime && dayjs.isDayjs(proposedEndTime) ? proposedEndTime.format('HH:mm') : '--:--'}
             />
           </Form.Item>
         </Space>
