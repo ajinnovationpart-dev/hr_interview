@@ -88,8 +88,15 @@ function App() {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
 
+  if (!_hasHydrated) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <span>로딩 중...</span>
+      </div>
+    )
+  }
   if (!isAuthenticated) {
     return <Navigate to="/auth/login" replace />
   }
@@ -98,8 +105,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedInterviewerRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
 
+  if (!_hasHydrated) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
+        <span>로딩 중...</span>
+      </div>
+    )
+  }
   if (!isAuthenticated) {
     return <Navigate to="/interviewer/login" replace />
   }

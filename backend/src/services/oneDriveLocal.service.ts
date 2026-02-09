@@ -149,23 +149,20 @@ export class OneDriveLocalService {
 
   /**
    * Excel 파일 로드 (로컬 파일 시스템에서)
+   * 매 요청마다 파일에서 다시 읽어, Excel에서 삭제/수정한 내용이 목록에 바로 반영되도록 함.
    */
   private async loadWorkbook(): Promise<XLSX.WorkBook> {
-    if (this.workbook) {
-      return this.workbook;
-    }
-
     try {
       await this.acquireLock();
-      
+
       try {
         // 파일이 존재하는지 확인
         await fs.access(this.filePath);
-        
-        // Excel 파일 읽기
+
+        // Excel 파일 읽기 (캐시 사용 안 함 - Excel 수정/삭제가 즉시 반영되도록)
         const fileBuffer = await fs.readFile(this.filePath);
         this.workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-        logger.info('Excel file loaded successfully from local path');
+        logger.debug('Excel file loaded from local path');
       } finally {
         await this.releaseLock();
       }

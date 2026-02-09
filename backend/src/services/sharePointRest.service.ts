@@ -269,17 +269,13 @@ export class SharePointRestService {
 
   /**
    * Excel 파일 다운로드 및 메모리에 로드
+   * 매 요청마다 서버에서 다시 받아, Excel에서 삭제/수정한 내용이 목록에 바로 반영되도록 함.
    */
   private async loadWorkbook(): Promise<XLSX.WorkBook> {
-    if (this.workbook) {
-      return this.workbook;
-    }
-
     try {
       // SharePoint REST API로 파일 다운로드
-      // 파일 경로를 ServerRelativeUrl 형식으로 변환
       const serverRelativeUrl = this.getServerRelativeUrl();
-      
+
       const response = await this.axiosInstance.get(
         `/_api/web/GetFileByServerRelativeUrl('${serverRelativeUrl}')/$value`,
         {
@@ -287,9 +283,9 @@ export class SharePointRestService {
         }
       );
 
-      // Excel 파일을 메모리에서 읽기
+      // Excel 파일을 메모리에서 읽기 (캐시 사용 안 함 - Excel 수정/삭제가 즉시 반영되도록)
       this.workbook = XLSX.read(response.data, { type: 'buffer' });
-      logger.info('Excel file loaded successfully');
+      logger.debug('Excel file loaded from SharePoint');
       return this.workbook;
     } catch (error: any) {
       logger.error('Error loading Excel file:', error);
