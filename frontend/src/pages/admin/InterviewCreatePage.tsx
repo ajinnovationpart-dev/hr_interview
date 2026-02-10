@@ -217,11 +217,15 @@ export function InterviewCreatePage() {
 
       const total = data.data.totalInterviewers ?? 0
       const sent = data.data.emailsSent ?? 0
+      const missingIds = data.data.missingInterviewerIds as string[] | undefined
       const msg = data.message || `면접이 등록되었습니다. ${sent}명에게 메일이 발송되었습니다.`
       if (total > 0 && sent === 0) {
         message.warning(msg)
       } else {
         message.success(msg)
+      }
+      if (missingIds?.length) {
+        message.warning(`일부 면접관(ID: ${missingIds.join(', ')})이 면접관 목록에 없거나 이메일이 비어 있어 메일이 발송되지 않았습니다. 면접관 관리에서 등록·수정 후 리마인더를 보내 주세요.`, 8)
       }
       navigate('/admin/dashboard')
     },

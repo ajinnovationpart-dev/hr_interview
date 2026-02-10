@@ -301,12 +301,14 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
 
     const responseStatus = mappings.map(mapping => {
       const interviewer = interviewerMap.get(mapping.interviewer_id);
+      const notFound = !interviewer;
       return {
         interviewerId: mapping.interviewer_id,
-        name: interviewer?.name || 'Unknown',
-        email: interviewer?.email || '',
+        name: interviewer?.name || `미등록 (ID: ${mapping.interviewer_id})`,
+        email: interviewer?.email ?? '',
         responded: !!mapping.responded_at,
         respondedAt: mapping.responded_at,
+        notFound, // 프론트에서 미등록 면접관 안내용
       };
     });
 
@@ -1032,6 +1034,9 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     if (noneSent) {
       message += ' 메일이 발송되지 않았습니다. SMTP 설정(.env의 SMTP_USER, SMTP_PASSWORD)과 서버 로그를 확인하거나, POST /api/test-email로 테스트 메일을 보내 보세요.';
     }
+    if (missingIds.length > 0) {
+      message += ` 일부 면접관(ID: ${missingIds.join(', ')})이 면접관 목록에 없거나 이메일이 비어 있어 메일이 발송되지 않았습니다. 면접관 관리에서 해당 ID를 등록·수정해 주세요.`;
+    }
 
     res.json({
       success: true,
@@ -1040,6 +1045,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
         proposedEndTime,
         emailsSent,
         totalInterviewers: allInterviewerIds.length,
+        missingInterviewerIds: missingIds,
         candidateSchedules,
         candidates: candidateSchedules.map(schedule => ({
           candidateId: schedule.candidateId,

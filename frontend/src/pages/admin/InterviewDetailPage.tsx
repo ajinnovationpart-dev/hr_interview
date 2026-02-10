@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Modal, Form, DatePicker, TimePicker, Input, Select } from 'antd'
+import { Card, Table, Tag, Button, Space, Descriptions, message, Popconfirm, Modal, Form, DatePicker, TimePicker, Input, Select, Tooltip } from 'antd'
 import { ArrowLeftOutlined, ThunderboltOutlined, CheckCircleOutlined, CopyOutlined, DeleteOutlined, BellOutlined, EditOutlined, CloseCircleOutlined, CheckCircleFilled } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { apiA } from '../../utils/apiA'
@@ -139,11 +139,25 @@ export function InterviewDetailPage() {
       title: '이름',
       dataIndex: 'name',
       key: 'name',
+      render: (name: string, record: any) =>
+        record.notFound ? (
+          <Tooltip title="면접관 관리에서 해당 ID를 등록하거나 이메일을 입력해 주세요.">
+            <span style={{ color: '#ff4d4f' }}>{name}</span>
+          </Tooltip>
+        ) : (
+          name
+        ),
     },
     {
       title: '이메일',
       dataIndex: 'email',
       key: 'email',
+      render: (email: string, record: any) =>
+        record.notFound && !email ? (
+          <span style={{ color: '#999' }}>- (미등록)</span>
+        ) : (
+          email || '-'
+        ),
     },
     {
       title: '응답 상태',

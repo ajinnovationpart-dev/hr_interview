@@ -148,6 +148,26 @@ export class OneDriveLocalService {
   }
 
   /**
+   * 잠금을 보유한 상태에서만 호출. 파일에서 워크북을 읽어 this.workbook에 설정.
+   * 파일이 없으면 빈 워크북 생성 (시트 생성은 호출자가 처리).
+   */
+  private async readWorkbookUnderLock(): Promise<void> {
+    try {
+      await fs.access(this.filePath);
+      const fileBuffer = await fs.readFile(this.filePath);
+      this.workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+      logger.debug('Excel file loaded under lock');
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        this.workbook = XLSX.utils.book_new();
+        logger.warn(`Excel file not found at ${this.filePath}, using new workbook`);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Excel 파일 로드 (로컬 파일 시스템에서)
    * 매 요청마다 파일에서 다시 읽어, Excel에서 삭제/수정한 내용이 목록에 바로 반영되도록 함.
    */
@@ -439,66 +459,66 @@ export class OneDriveLocalService {
   }
 
   /**
-   * 워크시트에 행 추가
+   * 워크시트에 행 추가 (락을 걸어 동시 요청 시 기존 데이터가 덮어쓰이지 않도록 함)
    */
   private async appendRow(sheetName: string, row: any[]): Promise<void> {
-    const workbook = await this.loadWorkbook();
-    
-    // 워크시트가 없으면 헤더 포함해서 생성
-    if (!workbook.Sheets[sheetName]) {
-      const sheetConfigs: Record<string, string[]> = {
-        'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
-        'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
-        'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
-        'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
-        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
-        'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
-        'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
-        'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
-        'config': ['config_key', 'config_value', 'description', 'updated_at'],
-        'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
-        'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
-        'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
-      };
-      
-      const headers = sheetConfigs[sheetName] || [];
-      const headerRow = headers.length > 0 ? [headers] : [];
-      workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(headerRow);
-      if (!workbook.SheetNames.includes(sheetName)) {
-        workbook.SheetNames.push(sheetName);
-      }
-    }
+    await this.acquireLock();
+    try {
+      await this.readWorkbookUnderLock();
+      const workbook = this.workbook!;
 
-    const worksheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
-    
-    // 헤더만 있고 데이터가 없는 경우 확인
-    if (rows.length === 1 && rows[0].every((cell: any) => !cell || cell === '')) {
-      // 헤더 행이 비어있으면 다시 설정
-      const sheetConfigs: Record<string, string[]> = {
-        'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
-        'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
-        'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
-        'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
-        'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
-        'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
-        'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
-        'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
-        'config': ['config_key', 'config_value', 'description', 'updated_at'],
-        'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
-        'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
-        'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
-      };
-      const headers = sheetConfigs[sheetName] || [];
-      if (headers.length > 0) {
-        rows[0] = headers;
+      // 워크시트가 없으면 헤더 포함해서 생성
+      if (!workbook.Sheets[sheetName]) {
+        const sheetConfigs: Record<string, string[]> = {
+          'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
+          'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
+          'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+          'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
+          'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
+          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+          'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+          'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
+          'config': ['config_key', 'config_value', 'description', 'updated_at'],
+          'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
+          'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+          'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
+        };
+        const headers = sheetConfigs[sheetName] || [];
+        const headerRow = headers.length > 0 ? [headers] : [];
+        workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(headerRow);
+        if (!workbook.SheetNames.includes(sheetName)) {
+          workbook.SheetNames.push(sheetName);
+        }
       }
+
+      const worksheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as any[][];
+
+      if (rows.length === 1 && rows[0].every((cell: any) => !cell || cell === '')) {
+        const sheetConfigs: Record<string, string[]> = {
+          'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
+          'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
+          'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+          'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
+          'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
+          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+          'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+          'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
+          'config': ['config_key', 'config_value', 'description', 'updated_at'],
+          'rooms': ['room_id', 'room_name', 'location', 'capacity', 'facilities', 'status', 'notes', 'created_at', 'updated_at'],
+          'interview_history': ['history_id', 'interview_id', 'change_type', 'old_value', 'new_value', 'changed_by', 'changed_at', 'reason'],
+          'evaluations': ['evaluation_id', 'interview_id', 'candidate_id', 'interviewer_id', 'technical_score', 'communication_score', 'fit_score', 'teamwork_score', 'overall_score', 'recommendation', 'comments', 'strengths', 'weaknesses', 'created_at'],
+        };
+        const headers = sheetConfigs[sheetName] || [];
+        if (headers.length > 0) rows[0] = headers;
+      }
+
+      rows.push(row);
+      workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
     }
-    
-    rows.push(row);
-    
-    workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(rows);
-    await this.saveWorkbook();
   }
 
   /**
