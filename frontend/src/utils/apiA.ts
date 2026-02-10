@@ -21,11 +21,9 @@ const getABackendApiUrl = () => {
     
     // 최종적으로 /api/a 추가 (항상 새로 추가)
     const finalUrl = `${apiUrl}/api/a`
-    console.log('🔧 A Backend URL 구성:', {
-      original: import.meta.env.VITE_API_URL,
-      afterCleanup: apiUrl,
-      final: finalUrl
-    })
+    if (import.meta.env.DEV) {
+      console.log('🔧 A Backend URL 구성:', { original: import.meta.env.VITE_API_URL, afterCleanup: apiUrl, final: finalUrl })
+    }
     return finalUrl
   }
   
@@ -39,9 +37,9 @@ const getABackendApiUrl = () => {
 
 const API_A_URL = getABackendApiUrl()
 
-// 디버깅: API URL 로그 출력 (프로덕션에서도 출력하여 문제 진단)
-console.log('🔧 A Backend API URL:', API_A_URL)
-console.log('🔧 VITE_API_URL (원본):', import.meta.env.VITE_API_URL)
+if (import.meta.env.DEV) {
+  console.log('🔧 A Backend API URL:', API_A_URL, 'VITE_API_URL:', import.meta.env.VITE_API_URL)
+}
 
 export const apiA = axios.create({
   baseURL: API_A_URL,
@@ -60,17 +58,12 @@ apiA.interceptors.request.use((config) => {
   return config
 })
 
-// Request interceptor: 로그 추가 및 ngrok 헤더 확실히 추가
+// Request interceptor: ngrok 헤더 확실히 추가 (로그는 개발 환경에서만)
 apiA.interceptors.request.use((config) => {
-  // ngrok 인터스티셜 건너뛰기 헤더 확실히 추가
   config.headers['ngrok-skip-browser-warning'] = '1'
-  
-  console.log('📤 A Backend API Request:', {
-    method: config.method?.toUpperCase(),
-    url: config.url,
-    baseURL: config.baseURL,
-    fullURL: `${config.baseURL}${config.url}`,
-  })
+  if (import.meta.env.DEV) {
+    console.log('📤 A Backend API Request:', config.method?.toUpperCase(), config.url, `${config.baseURL}${config.url}`)
+  }
   return config
 })
 
