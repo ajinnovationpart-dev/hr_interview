@@ -5,7 +5,7 @@ import { Router, Request, Response } from 'express';
 import { adminOrInterviewerAuth } from '../middlewares/auth.middleware';
 import { AppError } from '../middlewares/errorHandler';
 import { dataService } from '../services/dataService';
-import { geminiService } from '../services/gemini.service';
+import { getChatReply } from '../services/chatLLM.service';
 import { logger } from '../utils/logger';
 import dayjs from 'dayjs';
 
@@ -23,18 +23,63 @@ chatRouter.post('/', adminOrInterviewerAuth, async (req: Request, res: Response)
     let contextText = '';
 
     if (user.role === 'ADMIN') {
-      const interviews = await dataService.getAllInterviews();
-      const recent = interviews
-        .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-        .slice(0, 30);
-      contextText = [
-        '=== 등록된 면접 목록 (최근 30건) ===',
-        ...recent.map((i) => {
-          const date = i.proposed_date || i.confirmed_date || i.start_datetime || i.created_at;
-          const dateStr = date ? dayjs(date).format('YYYY-MM-DD') : '-';
-          return `- ID: ${i.interview_id}, 공고명: ${i.main_notice || '-'}, 팀: ${i.team_name || '-'}, 상태: ${i.status || '-'}, (제안/확정)일: ${dateStr}`;
-        }),
-      ].join('\n');
+      let interviewList = '=== 면접관 목록 === (로드 실패)';
+      let roomList = '=== 회의실 목록 === (로드 실패)';
+      let candidateSummary = '=== 지원자 현황 === (로드 실패)';
+      let interviewSection = '=== 등록된 면접 목록 === (로드 실패)';
+
+      try {
+        const interviewers = await dataService.getAllInterviewers();
+        interviewList = [
+          '=== 면접관 목록 ===',
+          ...(interviewers || []).map(
+            (iv: any) =>
+              `- 이름: ${iv.name || '-'}, 이메일: ${iv.email || '-'}, 부서: ${iv.department || '-'}, 직책: ${iv.position || '-'}, 연락처: ${iv.phone || '-'}${iv.is_team_lead ? ', 팀장' : ''}`
+          ),
+        ].join('\n');
+      } catch (e) {
+        logger.warn('Chat context: getAllInterviewers failed', e);
+      }
+
+      try {
+        const rooms = await dataService.getAllRooms();
+        roomList = [
+          '=== 회의실 목록 ===',
+          ...(rooms || []).map((r: any) => `- ${r.room_name || r.name || r.room_id || '-'} (ID: ${r.room_id})`),
+        ].join('\n');
+      } catch (e) {
+        logger.warn('Chat context: getAllRooms failed', e);
+      }
+
+      try {
+        const candidates = await dataService.getAllCandidates();
+        const pos = (c: any) => c.position_applied || c.positionApplied || '-';
+        candidateSummary =
+          candidates?.length > 0
+            ? `=== 지원자 현황 === 총 ${candidates.length}명. (일부: ${(candidates as any[]).slice(0, 20).map((c: any) => `${c.name}(${pos(c)})`).join(', ')}${candidates.length > 20 ? ' ...' : ''})`
+            : '=== 지원자 현황 === 없음';
+      } catch (e) {
+        logger.warn('Chat context: getAllCandidates failed', e);
+      }
+
+      try {
+        const interviews = await dataService.getAllInterviews();
+        const recent = (interviews || [])
+          .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+          .slice(0, 50);
+        interviewSection = [
+          '=== 등록된 면접 목록 (최근 50건) ===',
+          ...recent.map((i: any) => {
+            const date = i.proposed_date || i.confirmed_date || i.start_datetime || i.created_at;
+            const dateStr = date ? dayjs(date).format('YYYY-MM-DD') : '-';
+            return `- ID: ${i.interview_id}, 공고명: ${i.main_notice || '-'}, 팀: ${i.team_name || '-'}, 상태: ${i.status || '-'}, (제안/확정)일: ${dateStr}`;
+          }),
+        ].join('\n');
+      } catch (e) {
+        logger.warn('Chat context: getAllInterviews failed', e);
+      }
+
+      contextText = [interviewList, roomList, candidateSummary, interviewSection].join('\n\n');
     } else {
       const interviewerId = user.interviewerId!;
       const allInterviews = await dataService.getAllInterviews();
@@ -84,7 +129,7 @@ chatRouter.post('/', adminOrInterviewerAuth, async (req: Request, res: Response)
             '  담당 지원자:',
             ...i.candidates.map(
               (c: any) =>
-                `    - ${c.name} (${c.position_applied}) 일정: ${c.scheduled_start || '-'}~${c.scheduled_end || '-'} | 메모: ${c.notes || '-'} | 이력서: ${c.resume_url ? '있음' : '없음'}`
+                `    - ${c.name} (${c.position_applied || c.positionApplied || '-'}) 일정: ${c.scheduled_start || '-'}~${c.scheduled_end || '-'} | 메모: ${c.notes || '-'} | 이력서: ${c.resume_url ? '있음' : '없음'}`
             ),
           ];
           return lines.join('\n');
@@ -92,7 +137,7 @@ chatRouter.post('/', adminOrInterviewerAuth, async (req: Request, res: Response)
       ].join('\n\n');
     }
 
-    const reply = await geminiService.chat(contextText, message);
+    const reply = await getChatReply(contextText, message);
     res.json({ success: true, data: { reply } });
   } catch (error) {
     if (error instanceof AppError) throw error;

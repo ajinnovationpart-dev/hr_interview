@@ -192,12 +192,13 @@ export function RoomManagePage() {
           <Popconfirm
             title="면접실 삭제"
             description="이 면접실을 삭제하시겠습니까?"
-            onConfirm={() => handleDelete(record.room_id)}
+            onConfirm={() => record.room_id && handleDelete(record.room_id)}
             okText="삭제"
             cancelText="취소"
           >
             <Button
               type="link"
+              htmlType="button"
               danger
               icon={<DeleteOutlined />}
             >

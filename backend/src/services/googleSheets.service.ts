@@ -287,6 +287,26 @@ export class GoogleSheetsService {
     if (!result.success) throw new Error(result.message);
   }
 
+  // ========== Rooms (stub: Google Sheets 백엔드에서 미구현) ==========
+  async getAllRooms(): Promise<any[]> {
+    return [];
+  }
+  async getRoomById(_roomId: string): Promise<any | null> {
+    return null;
+  }
+  async createRoom(_room: any): Promise<void> {
+    throw new Error('Google Sheets 저장소에서는 면접실 등록을 지원하지 않습니다. OneDrive/Excel 또는 SharePoint를 사용해 주세요.');
+  }
+  async updateRoom(_roomId: string, _updates: any): Promise<void> {
+    throw new Error('Google Sheets 저장소에서는 면접실 수정을 지원하지 않습니다. OneDrive/Excel 또는 SharePoint를 사용해 주세요.');
+  }
+  async deleteRoom(_roomId: string): Promise<void> {
+    throw new Error('Google Sheets 저장소에서는 면접실 삭제를 지원하지 않습니다. OneDrive/Excel 또는 SharePoint를 사용해 주세요.');
+  }
+  async getRoomAvailability(_roomId: string, _date: string): Promise<any[]> {
+    return [];
+  }
+
   // ========== Config ==========
 
   async getConfig(): Promise<Record<string, string>> {

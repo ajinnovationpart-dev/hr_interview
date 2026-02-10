@@ -24,10 +24,13 @@
   - `SHAREPOINT_ENABLED=true` 등 SharePoint 관련 변수 설정  
   - 평가/이력서 등 추가 기능은 스토리지별 구현 여부 확인 필요.
 
-### 챗봇 (Gemini, 선택)
+### 챗봇 LLM (Groq만 사용, 무료)
 
-- **`GEMINI_API_KEY`**  
-  - 메인 화면 챗봇(면접/일정 질의응답)에 사용. 미설정 시 챗봇에서 "AI 서비스가 설정되지 않았습니다" 안내.
+- **`GROQ_API_KEY`**  
+  - [Groq Console](https://console.groq.com)에서 발급. **무료 티어**, 신용카드 불필요.
+- **`GROQ_CHAT_MODEL`** (선택)  
+  - 기본값: `llama-3.1-8b-instant`. 429 시 2초 후 동일 모델로 1회 재시도. [지원 모델](https://console.groq.com/docs/models)
+- 요청 큐(초당 약 1회) + 컨텍스트 길이 제한으로 429 완화.
 
 ### 면접관 일정 조회 (Power Automate, 선택)
 

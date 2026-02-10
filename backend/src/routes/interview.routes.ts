@@ -6,7 +6,6 @@ import { dataService } from '../services/dataService';
 import { emailService } from '../services/email.service';
 import { EmailTemplateService } from '../services/emailTemplate.service';
 import { commonSlotService } from '../services/commonSlot.service';
-import { geminiService } from '../services/gemini.service';
 import { generateJWT } from '../utils/jwt';
 import { calculateEndTime, calculateCandidateSlots, checkMinNoticeHours } from '../utils/timeSlots';
 import { logger } from '../utils/logger';
@@ -247,10 +246,10 @@ interviewRouter.get('/dashboard', adminAuth, async (req: Request, res: Response)
       noShow: interviews.filter(i => i.status === 'NO_SHOW').length,
     };
 
-    // 최근 면접 10개 (최신순)
+    // 최근 면접 50개 (최신순) - 대시보드와 목록 노출 일치
     const recentInterviews = interviews
       .sort((a, b) => dayjs(b.created_at).diff(dayjs(a.created_at)))
-      .slice(0, 10)
+      .slice(0, 50)
       .map(interview => ({
         interviewId: interview.interview_id,
         mainNotice: interview.main_notice,
@@ -327,10 +326,41 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
     // 확정 일정 조회
     const confirmedSchedule = await dataService.getConfirmedSchedule(interviewId);
 
+    // 상세 화면용 interview 보강: candidates 요약, start_datetime, end_datetime
+    const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
+    const candidateNames: string[] = [];
+    for (const ic of interviewCandidates) {
+      const candidate = await dataService.getCandidateById(ic.candidate_id);
+      if (candidate?.name) candidateNames.push(candidate.name);
+    }
+    const padTime = (t: string) => {
+      if (!t || typeof t !== 'string') return '09:00';
+      const parts = t.trim().split(':');
+      const h = parts[0]?.replace(/\D/g, '') || '9';
+      const m = parts[1]?.replace(/\D/g, '') || '0';
+      return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`.slice(0, 5);
+    };
+    const startTime = confirmedSchedule
+      ? padTime(confirmedSchedule.confirmed_start_time)
+      : padTime(interview.proposed_start_time);
+    const endTime = confirmedSchedule
+      ? padTime(confirmedSchedule.confirmed_end_time)
+      : padTime(interview.proposed_end_time);
+    const interviewEnriched = {
+      ...interview,
+      candidates: candidateNames.length > 0 ? candidateNames.join(', ') : '-',
+      start_datetime: confirmedSchedule
+        ? `${confirmedSchedule.confirmed_date}T${startTime}:00`
+        : (interview.proposed_date ? `${interview.proposed_date}T${startTime}:00` : interview.created_at || new Date().toISOString()),
+      end_datetime: confirmedSchedule
+        ? `${confirmedSchedule.confirmed_date}T${endTime}:00`
+        : (interview.proposed_date ? `${interview.proposed_date}T${endTime}:00` : interview.created_at || new Date().toISOString()),
+    };
+
     res.json({
       success: true,
       data: {
-        interview,
+        interview: interviewEnriched,
         responseStatus,
         timeSelections: timeSelectionsWithNames,
         commonSlots: commonSlotsResult.commonSlots,
@@ -531,7 +561,7 @@ interviewRouter.post('/:id/remind', adminAuth, async (req: Request, res: Respons
   }
 });
 
-// AI 분석으로 공통 시간대 찾기
+// 공통 시간대 분석 (면접관별 선택 데이터 교집합, Gemini 미사용)
 interviewRouter.post('/:id/analyze', adminAuth, async (req: Request, res: Response) => {
   try {
     const interviewId = req.params.id;
@@ -541,72 +571,31 @@ interviewRouter.post('/:id/analyze', adminAuth, async (req: Request, res: Respon
       throw new AppError(404, '면접을 찾을 수 없습니다');
     }
 
-    // Gemini AI 사용 가능 여부 확인
-    if (!geminiService.isGeminiAvailable()) {
-      throw new AppError(503, 'Gemini AI를 사용할 수 없습니다. GEMINI_API_KEY 환경 변수를 확인해주세요.');
-    }
-
-    // 시간 선택 조회
     const timeSelections = await dataService.getTimeSelectionsByInterview(interviewId);
-    
     if (timeSelections.length === 0) {
       throw new AppError(400, '분석할 시간 선택 데이터가 없습니다. 면접관들이 먼저 일정을 선택해야 합니다.');
     }
 
-    // 면접관 정보 조회
-    const allInterviewers = await dataService.getAllInterviewers();
-    const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
+    const commonSlotsResult = await commonSlotService.findCommonSlots(interviewId);
+    const commonSlots = commonSlotService.sortSlots(commonSlotsResult.commonSlots);
 
-    // 면접관별로 시간 선택 그룹화
-    const selectionsByInterviewer = new Map<string, Array<{ date: string; startTime: string; endTime: string }>>();
-    
-    for (const selection of timeSelections) {
-      if (!selectionsByInterviewer.has(selection.interviewer_id)) {
-        selectionsByInterviewer.set(selection.interviewer_id, []);
-      }
-      selectionsByInterviewer.get(selection.interviewer_id)!.push({
-        date: selection.slot_date,
-        startTime: selection.start_time,
-        endTime: selection.end_time,
-      });
-    }
-
-    // Gemini AI 분석을 위한 데이터 준비
-    const selectionData = Array.from(selectionsByInterviewer.entries()).map(([interviewerId, slots]) => {
-      const interviewer = interviewerMap.get(interviewerId);
-      return {
-        interviewerId,
-        interviewerName: interviewer?.name || interviewerId,
-        availableSlots: slots,
-      };
-    });
-
-    logger.info(`🤖 Starting AI analysis for interview ${interviewId} with ${selectionData.length} interviewers`);
-
-    // Gemini AI 분석 실행
-    const analysisResult = await geminiService.findCommonSlots(selectionData);
-
-    if (!analysisResult.success) {
-      throw new AppError(500, analysisResult.error || 'AI 분석 중 오류가 발생했습니다.');
-    }
-
-    logger.info(`✅ AI analysis completed: Found ${analysisResult.commonSlots.length} common slots`);
+    logger.info(`Common slot analysis for interview ${interviewId}: ${commonSlots.length} slots`);
 
     res.json({
       success: true,
       data: {
-        commonSlots: analysisResult.commonSlots,
-        analyzedCount: selectionData.length,
+        commonSlots,
+        analyzedCount: new Set(timeSelections.map((s) => s.interviewer_id)).size,
         totalSelections: timeSelections.length,
       },
-      message: `${analysisResult.commonSlots.length}개의 공통 시간대를 찾았습니다.`,
+      message: commonSlots.length > 0 ? `${commonSlots.length}개의 공통 시간대를 찾았습니다.` : '공통 가능 시간대가 없습니다.',
     });
   } catch (error) {
     if (error instanceof AppError) {
       throw error;
     }
-    logger.error('Error in AI analysis:', error);
-    throw new AppError(500, 'AI 분석 실패');
+    logger.error('Error in common slot analysis:', error);
+    throw new AppError(500, '공통 시간대 분석 실패');
   }
 });
 

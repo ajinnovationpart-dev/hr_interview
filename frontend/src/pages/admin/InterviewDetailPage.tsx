@@ -225,6 +225,7 @@ export function InterviewDetailPage() {
                     okButtonProps={{ danger: true }}
                   >
                     <Button
+                      htmlType="button"
                       danger
                       icon={<DeleteOutlined />}
                       loading={deleteMutation.isPending}
@@ -243,12 +244,20 @@ export function InterviewDetailPage() {
                     {statusLabels[data.interview.status]}
                   </Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="면접자">{data.interview.candidates}</Descriptions.Item>
+                <Descriptions.Item label="면접자">{data.interview.candidates ?? '-'}</Descriptions.Item>
                 <Descriptions.Item label="시작 일시">
-                  {new Date(data.interview.start_datetime).toLocaleString('ko-KR')}
+                  {data.interview.start_datetime
+                    ? new Date(data.interview.start_datetime).toLocaleString('ko-KR')
+                    : data.interview.proposed_date && data.interview.proposed_start_time
+                      ? `${data.interview.proposed_date} ${data.interview.proposed_start_time}`
+                      : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="종료 일시">
-                  {new Date(data.interview.end_datetime).toLocaleString('ko-KR')}
+                  {data.interview.end_datetime
+                    ? new Date(data.interview.end_datetime).toLocaleString('ko-KR')
+                    : data.interview.proposed_date && data.interview.proposed_end_time
+                      ? `${data.interview.proposed_date} ${data.interview.proposed_end_time}`
+                      : '-'}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -450,6 +459,7 @@ export function InterviewDetailPage() {
             >
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Button
+                  htmlType="button"
                   danger
                   icon={<DeleteOutlined />}
                   onClick={() => {

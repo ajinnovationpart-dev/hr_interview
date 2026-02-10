@@ -299,12 +299,13 @@ export function InterviewerManagePage() {
           <Popconfirm
             title="면접관 비활성화"
             description="이 면접관을 비활성화하시겠습니까?"
-            onConfirm={() => handleDelete(record.interviewer_id)}
+            onConfirm={() => record.interviewer_id && handleDelete(record.interviewer_id)}
             okText="예"
             cancelText="아니오"
           >
             <Button
               type="link"
+              htmlType="button"
               danger
               icon={<DeleteOutlined />}
             >

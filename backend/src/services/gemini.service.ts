@@ -87,7 +87,7 @@ Output format (JSON array):
 `;
 
       const model = this.genAI.getGenerativeModel({ 
-        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash' 
+        model: process.env.GEMINI_MODEL || 'gemini-pro' 
       });
 
       logger.info(`🤖 Starting Gemini AI analysis for ${selections.length} interviewers`);
@@ -184,14 +184,18 @@ ${userMessage}
 [답변] (한국어, 요점 정리, 불릿 가능):`;
 
       const model = this.genAI.getGenerativeModel({
-        model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+        model: process.env.GEMINI_MODEL || 'gemini-pro',
       });
       const result = await model.generateContent(prompt);
       const response = await result.response;
       return response.text()?.trim() || '답변을 생성하지 못했습니다.';
     } catch (error: any) {
       logger.error('Gemini chat error:', error);
-      return `일시적인 오류가 발생했습니다. (${error?.message || 'Unknown error'})`;
+      const msg = error?.message || '';
+      if (msg.includes('429') || msg.includes('Too Many Requests') || msg.includes('quota') || msg.includes('Quota exceeded')) {
+        return '요청 한도를 초과했습니다. 무료 한도는 모델별·일별 제한이 있습니다.\n\n• 잠시 후(약 1분) 다시 시도해 보세요.\n• .env에서 GEMINI_MODEL을 지우거나 gemini-pro 로 두고 사용해 보세요. (gemini-2.0-flash 는 무료 한도가 없을 수 있음)\n• 한도 확인: https://ai.google.dev/gemini-api/docs/rate-limits';
+      }
+      return `일시적인 오류가 발생했습니다. (${msg || 'Unknown error'})`;
     }
   }
 }
