@@ -73,3 +73,4 @@
 - [ ] OneDrive 사용 시 `ONEDRIVE_EXCEL_PATH`, 필요 시 `RESUME_UPLOAD_DIR` 설정  
 - [ ] 프론트 개발 시 백엔드가 3000 포트에서 실행 중인지 확인  
 - [ ] 프로덕션 배포 시 `VITE_API_URL` 설정 후 빌드  
+- [ ] **메일이 Gmail 보낸메일함에는 있는데 수신함에 안 들어올 때**: `EMAIL_DELIVERY_GUIDE.md` 참고 (발신자=Gmail 일치, 스팸/수신 서버 정책 확인)

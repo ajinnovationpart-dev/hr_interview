@@ -231,7 +231,7 @@ export class EmailService {
           'Importance': 'normal',
           'MIME-Version': '1.0',
           'Date': new Date().toUTCString(),
-          'Precedence': 'bulk',
+          // Precedence: bulk 제거 - 수신 서버에서 스팸/대량메일로 분류되어 미도달될 수 있음
           'X-Auto-Response-Suppress': 'All', // Outlook 자동 응답 억제
           'List-Unsubscribe': `<mailto:${replyTo}?subject=unsubscribe>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
