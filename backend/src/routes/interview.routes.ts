@@ -834,6 +834,13 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     // 면접관별로 이메일 발송 (담당 면접자 정보 포함)
     let emailsSent = 0;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const emailResults: Array<{
+      interviewerId: string;
+      name?: string;
+      email?: string;
+      status: 'SENT' | 'FAILED' | 'SKIPPED_INACTIVE' | 'SKIPPED_NO_EMAIL' | 'SKIPPED_INVALID_EMAIL' | 'NOT_FOUND';
+      reason?: string;
+    }> = [];
     
     // 면접관별 처리 상태 추적 (선택한 면접관마다 1통씩 발송; 같은 이메일이어도 ID별로 각각 발송)
     const interviewerProcessingStatus = new Map<string, { processed: boolean; email: string; name: string }>();
@@ -866,6 +873,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       }
       if (!interviewer) {
         logger.warn(`⚠️ Interviewer not found: ${interviewerId}. Available: ${allInterviewers.map(iv => iv.interviewer_id).slice(0, 8).join(', ')}...`);
+        emailResults.push({ interviewerId: String(interviewerId), status: 'NOT_FOUND', reason: 'Interviewer ID not found in system' });
         continue;
       }
       
@@ -884,11 +892,25 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       
       if (!interviewer.is_active) {
         logger.info(`⏭️ Skipping inactive interviewer: ${interviewer.name} (${interviewer.email})`);
+        emailResults.push({
+          interviewerId: String(interviewer.interviewer_id ?? interviewerId),
+          name: interviewer.name,
+          email: interviewer.email || '',
+          status: 'SKIPPED_INACTIVE',
+          reason: 'Interviewer is inactive',
+        });
         continue;
       }
       
       if (!interviewer.email || !interviewer.email.trim()) {
         logger.error(`❌ Interviewer has no email: ${interviewer.name} (ID: ${interviewerId})`);
+        emailResults.push({
+          interviewerId: String(interviewer.interviewer_id ?? interviewerId),
+          name: interviewer.name,
+          email: interviewer.email || '',
+          status: 'SKIPPED_NO_EMAIL',
+          reason: 'Interviewer email is missing',
+        });
         continue;
       }
 
@@ -944,6 +966,13 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           if (!emailRegex.test(emailToSend)) {
             logger.error(`❌ Invalid email format for ${interviewer.name}: ${rawEmail}`);
+            emailResults.push({
+              interviewerId: String(interviewer.interviewer_id ?? interviewerId),
+              name: interviewer.name,
+              email: rawEmail,
+              status: 'SKIPPED_INVALID_EMAIL',
+              reason: 'Invalid email format',
+            });
             continue;
           }
           
@@ -975,6 +1004,12 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           
           emailsSent++;
           logger.info(`✅ Email sent successfully to ${interviewer.name} (${emailToSend}) - ${emailsSent}/${allInterviewerIds.length}`);
+          emailResults.push({
+            interviewerId: String(interviewer.interviewer_id ?? interviewerId),
+            name: interviewer.name,
+            email: emailToSend,
+            status: 'SENT',
+          });
         } catch (error: any) {
           logger.error(`❌ Failed to send email to ${interviewer.name} (${interviewer.email}):`, {
             interviewerId: interviewer.interviewer_id,
@@ -988,10 +1023,24 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
             response: error.response,
             stack: error.stack,
           });
+          emailResults.push({
+            interviewerId: String(interviewer.interviewer_id ?? interviewerId),
+            name: interviewer.name,
+            email: interviewer.email?.trim().toLowerCase() || '',
+            status: 'FAILED',
+            reason: error?.message || 'Unknown error',
+          });
           // 이메일 발송 실패해도 면접 생성은 계속 진행
         }
       } catch (error: any) {
         logger.error(`Error processing interviewer ${interviewerId}:`, error);
+        emailResults.push({
+          interviewerId: String(interviewer.interviewer_id ?? interviewerId),
+          name: interviewer.name,
+          email: interviewer.email || '',
+          status: 'FAILED',
+          reason: error?.message || 'Error processing interviewer',
+        });
         // 개별 면접관 처리 실패해도 계속 진행
       }
     }
@@ -1030,6 +1079,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
         emailsSent,
         totalInterviewers: allInterviewerIds.length,
         missingInterviewerIds: missingIds,
+        emailResults,
         candidateSchedules,
         candidates: candidateSchedules.map(schedule => ({
           candidateId: schedule.candidateId,

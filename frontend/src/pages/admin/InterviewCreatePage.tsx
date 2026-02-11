@@ -12,6 +12,10 @@ const { Text, Title } = Typography
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ label: `${i}시`, value: i }))
 const MINUTE_OPTIONS = [0, 30].map((m) => ({ label: `${m}분`, value: m }))
 
+function normalizeInterviewerId(id: unknown): string {
+  return String(id ?? '').trim()
+}
+
 /** 분을 0 또는 30으로 맞춤 (이전 값/버그로 32분 등이 들어온 경우) */
 function normalizeMinute(m: number): number {
   if (m === 0 || m === 30) return m
@@ -87,8 +91,31 @@ export function InterviewCreatePage() {
     },
   })
 
+  // 면접관 ID 공백/중복 변형 방어: ID를 trim한 값 기준으로 중복 제거
+  // (백엔드도 trim하여 유니크 처리하므로, 프론트에서 미리 동일한 기준으로 통일)
+  const normalizedInterviewers = React.useMemo(() => {
+    if (!Array.isArray(interviewers)) return []
+    const byId = new Map<string, any>()
+    const score = (iv: any) =>
+      (iv?.is_active ? 2 : 0) + (iv?.email && String(iv.email).trim() ? 1 : 0)
+
+    for (const iv of interviewers) {
+      const id = normalizeInterviewerId(iv?.interviewer_id)
+      if (!id) continue
+      const existing = byId.get(id)
+      if (!existing) {
+        byId.set(id, iv)
+        continue
+      }
+      if (score(iv) > score(existing)) {
+        byId.set(id, iv)
+      }
+    }
+    return Array.from(byId.values())
+  }, [interviewers])
+
   // 면접관을 부서별로 그룹화
-  const groupedInterviewers = interviewers?.reduce((acc: any, interviewer: any) => {
+  const groupedInterviewers = normalizedInterviewers?.reduce((acc: any, interviewer: any) => {
     const department = interviewer.department || '기타'
     if (!acc[department]) {
       acc[department] = []
@@ -117,9 +144,16 @@ export function InterviewCreatePage() {
             {interviewer.is_team_lead && (
               <Tag color="red" style={{ margin: 0 }}>⭐팀장급</Tag>
             )}
+            {!interviewer.is_active && (
+              <Tag color="default" style={{ margin: 0 }}>비활성</Tag>
+            )}
+            {(!interviewer.email || !String(interviewer.email).trim()) && (
+              <Tag color="default" style={{ margin: 0 }}>이메일없음</Tag>
+            )}
           </Space>
         ),
-        value: interviewer.interviewer_id,
+        value: normalizeInterviewerId(interviewer.interviewer_id),
+        disabled: !interviewer.is_active || !interviewer.email || !String(interviewer.email).trim(),
         interviewer: interviewer,
       })),
     }
@@ -219,13 +253,27 @@ export function InterviewCreatePage() {
       const sent = data.data.emailsSent ?? 0
       const missingIds = data.data.missingInterviewerIds as string[] | undefined
       const msg = data.message || `면접이 등록되었습니다. ${sent}명에게 메일이 발송되었습니다.`
-      if (total > 0 && sent === 0) {
-        message.warning(msg)
-      } else {
-        message.success(msg)
-      }
+      const allSent = total > 0 && sent === total
+      if (allSent) message.success(msg)
+      else message.warning(msg)
       if (missingIds?.length) {
         message.warning(`일부 면접관(ID: ${missingIds.join(', ')})이 면접관 목록에 없거나 이메일이 비어 있어 메일이 발송되지 않았습니다. 면접관 관리에서 등록·수정 후 리마인더를 보내 주세요.`, 8)
+      }
+
+      // 백엔드에서 내려주는 상세 결과(스킵/실패 사유) 요약 표시
+      const emailResults = (data.data.emailResults as any[] | undefined) || undefined
+      if (Array.isArray(emailResults) && emailResults.length > 0) {
+        const problematic = emailResults.filter((r) => r?.status && r.status !== 'SENT')
+        if (problematic.length > 0) {
+          const short = problematic.slice(0, 5).map((r) => {
+            const who = r?.name ? `${r.name}(${r.interviewerId})` : String(r?.interviewerId || '')
+            const status = String(r.status)
+            const reason = r?.reason ? `: ${String(r.reason)}` : ''
+            return `${who} - ${status}${reason}`
+          })
+          const more = problematic.length > short.length ? ` 외 ${problematic.length - short.length}명` : ''
+          message.warning(`메일 미발송/실패 상세: ${short.join(' / ')}${more}`, 10)
+        }
       }
       navigate('/admin/dashboard')
     },
@@ -262,7 +310,9 @@ export function InterviewCreatePage() {
       email: c.email || '',
       phone: c.phone || '',
       positionApplied: c.positionApplied,
-      interviewerIds: c.interviewerIds || [],
+      interviewerIds: Array.from(
+        new Set((c.interviewerIds || []).map(normalizeInterviewerId).filter(Boolean))
+      ),
     }))
 
     // 검증
@@ -277,11 +327,23 @@ export function InterviewCreatePage() {
       }
       
       // 팀장급 필수 체크
-      const selectedInterviewers = interviewers?.filter((iv: any) => 
-        candidate.interviewerIds.includes(iv.interviewer_id)
+      const selectedInterviewers = normalizedInterviewers?.filter((iv: any) =>
+        candidate.interviewerIds.includes(normalizeInterviewerId(iv.interviewer_id))
       ) || []
       const hasTeamLead = selectedInterviewers.some((iv: any) => iv.is_team_lead)
       
+      // 활성/이메일 보유 체크 (비활성/이메일없음 선택 방지)
+      const inactiveSelected = selectedInterviewers.filter((iv: any) => !iv.is_active)
+      if (inactiveSelected.length) {
+        message.error(`${candidate.name}님의 담당 면접관 중 비활성 면접관이 포함되어 있습니다. (예: ${inactiveSelected[0].name})`)
+        return
+      }
+      const noEmailSelected = selectedInterviewers.filter((iv: any) => !iv.email || !String(iv.email).trim())
+      if (noEmailSelected.length) {
+        message.error(`${candidate.name}님의 담당 면접관 중 이메일이 없는 면접관이 포함되어 있습니다. (예: ${noEmailSelected[0].name})`)
+        return
+      }
+
       if (!hasTeamLead) {
         message.error(`${candidate.name}님의 담당 면접관 중 팀장급 이상 1명은 필수로 포함해야 합니다`)
         return
@@ -502,7 +564,7 @@ export function InterviewCreatePage() {
                       maxTagCount="responsive"
                       tagRender={(props) => {
                         const { value, closable, onClose } = props
-                        const interviewer = interviewers?.find((iv: any) => iv.interviewer_id === value)
+                        const interviewer = normalizedInterviewers?.find((iv: any) => normalizeInterviewerId(iv.interviewer_id) === value)
                         return (
                           <Tag
                             color={interviewer?.is_team_lead ? 'red' : 'blue'}
