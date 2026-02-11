@@ -646,27 +646,22 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       interviewDuration
     );
 
-    // 모든 면접관 ID 수집 (중복 제거 및 정규화)
+    // 모든 면접관 ID 수집 (중복 제거, 정규화, 방어적 처리)
     const allInterviewerIdsSet = new Set<string>();
-    const interviewerIdCount = new Map<string, number>(); // 각 면접관 ID가 몇 번 등장하는지 카운트
-    const idNormalizationMap = new Map<string, string>(); // 원본 ID -> 정규화된 ID 매핑
-    
-    validated.candidates.forEach(c => {
-      c.interviewerIds.forEach(originalId => {
-        // 면접관 ID 정규화 (공백 제거)
-        const normalizedId = originalId.trim();
-        
-        // 정규화 매핑 저장
-        if (originalId !== normalizedId) {
-          idNormalizationMap.set(originalId, normalizedId);
-        }
-        
-        // 정규화된 ID로 중복 제거 및 카운트
-        allInterviewerIdsSet.add(normalizedId);
-        interviewerIdCount.set(normalizedId, (interviewerIdCount.get(normalizedId) || 0) + 1);
-      });
+    const interviewerIdCount = new Map<string, number>();
+    const idNormalizationMap = new Map<string, string>();
+
+    const rawIds = validated.candidates.flatMap(c => (c.interviewerIds || []));
+    rawIds.forEach(originalId => {
+      const normalizedId = String(originalId ?? '').trim();
+      if (!normalizedId) return;
+      if (originalId !== normalizedId) idNormalizationMap.set(String(originalId), normalizedId);
+      allInterviewerIdsSet.add(normalizedId);
+      interviewerIdCount.set(normalizedId, (interviewerIdCount.get(normalizedId) || 0) + 1);
     });
     const allInterviewerIds = Array.from(allInterviewerIdsSet);
+
+    logger.info(`📋 [EMAIL] Request candidates: ${validated.candidates.length}, raw interviewer IDs: ${rawIds.length}, unique: ${allInterviewerIds.length} (${allInterviewerIds.join(', ')})`);
     
     // 정규화된 ID 로깅
     if (idNormalizationMap.size > 0) {
@@ -748,17 +743,19 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     const interviewerIdVariants = new Map<string, string[]>(); // 정규화된 ID -> 원본 ID 변형들
     
     allInterviewers.forEach(iv => {
-      const normalizedId = iv.interviewer_id.trim();
-      
-      // 정규화된 ID를 키로 사용
+      const rawId = iv.interviewer_id != null ? String(iv.interviewer_id) : '';
+      const normalizedId = rawId.trim();
+      const normalizedIdLower = normalizedId.toLowerCase();
+
       if (!interviewerMap.has(normalizedId)) {
         interviewerMap.set(normalizedId, iv);
         interviewerIdVariants.set(normalizedId, []);
       }
-      
-      // 원본 ID와 정규화된 ID가 다르면 변형 목록에 추가
-      if (iv.interviewer_id !== normalizedId) {
-        interviewerIdVariants.get(normalizedId)!.push(iv.interviewer_id);
+      if (normalizedIdLower !== normalizedId) {
+        interviewerMap.set(normalizedIdLower, iv);
+      }
+      if (rawId !== normalizedId) {
+        interviewerIdVariants.get(normalizedId)!.push(rawId);
       }
     });
     
@@ -838,13 +835,10 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     let emailsSent = 0;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     
-    // 이미 처리한 이메일 주소 추적 (중복 발송 방지)
-    const processedEmails = new Set<string>();
-    
-    // 면접관별 처리 상태 추적
+    // 면접관별 처리 상태 추적 (선택한 면접관마다 1통씩 발송; 같은 이메일이어도 ID별로 각각 발송)
     const interviewerProcessingStatus = new Map<string, { processed: boolean; email: string; name: string }>();
     allInterviewerIds.forEach(id => {
-      const iv = interviewerMap.get(id);
+      const iv = interviewerMap.get(id) ?? interviewerMap.get(id.trim()) ?? interviewerMap.get(String(id).toLowerCase());
       if (iv) {
         interviewerProcessingStatus.set(id, {
           processed: false,
@@ -853,38 +847,28 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
         });
       }
     });
-    
+
     logger.info(`📧 Starting email sending process for ${allInterviewerIds.length} unique interviewer(s)`);
     logger.info(`   - Interviewer IDs to process: ${allInterviewerIds.join(', ')}`);
 
+    if (!emailService.isConfigured()) {
+      logger.error('❌ SMTP not configured. Skipping all email sends. Set SMTP_USER and SMTP_PASSWORD in .env');
+    }
+
     for (const interviewerId of allInterviewerIds) {
-      const interviewer = interviewerMap.get(interviewerId);
-      
-      // 면접관 정보 확인 및 로깅
+      const idTrimmed = String(interviewerId).trim();
+      const idLower = idTrimmed.toLowerCase();
+      let interviewer = interviewerMap.get(interviewerId) ?? interviewerMap.get(idTrimmed) ?? interviewerMap.get(idLower);
       if (!interviewer) {
-        logger.warn(`⚠️ Interviewer not found in map: ${interviewerId}. Available IDs: ${Array.from(interviewerMap.keys()).slice(0, 5).join(', ')}...`);
+        interviewer = allInterviewers.find(
+          iv => String(iv.interviewer_id ?? '').trim().toLowerCase() === idLower
+        ) ?? undefined;
+      }
+      if (!interviewer) {
+        logger.warn(`⚠️ Interviewer not found: ${interviewerId}. Available: ${allInterviewers.map(iv => iv.interviewer_id).slice(0, 8).join(', ')}...`);
         continue;
       }
       
-      // 이메일 주소 정규화
-      const normalizedEmail = interviewer.email?.trim().toLowerCase() || '';
-      
-      // 중복 이메일 주소 확인
-      if (normalizedEmail && processedEmails.has(normalizedEmail)) {
-        logger.warn(`⚠️ [DUPLICATE EMAIL SKIP] Email ${normalizedEmail} (${interviewer.name}, ID: ${interviewerId}) already processed. Skipping to prevent duplicate email.`);
-        logger.warn(`   - This interviewer ID may be a duplicate or share the same email with another interviewer`);
-        const status = interviewerProcessingStatus.get(interviewerId);
-        if (status) {
-          status.processed = true;
-        }
-        continue;
-      }
-      
-      if (normalizedEmail) {
-        processedEmails.add(normalizedEmail);
-      }
-      
-      // 처리 상태 업데이트
       const status = interviewerProcessingStatus.get(interviewerId);
       if (status) {
         status.processed = true;
@@ -920,7 +904,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
             candidateSchedule.candidateId
           );
           
-          if (candidateInterviewers.some(ci => ci.interviewer_id === interviewerId)) {
+          if (candidateInterviewers.some(ci => String(ci.interviewer_id ?? '').trim().toLowerCase() === idLower)) {
             const candidate = validated.candidates.find(c => c.name === candidateSchedule.name);
             assignedCandidates.push({
               name: candidateSchedule.name,

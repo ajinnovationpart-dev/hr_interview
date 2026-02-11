@@ -168,6 +168,31 @@ export class OneDriveLocalService {
   }
 
   /**
+   * 잠금을 건 상태에서 파일만 읽어 워크북 생성 (호출 전에 acquireLock 필요)
+   */
+  private async loadWorkbookHoldingLock(): Promise<XLSX.WorkBook> {
+    try {
+      await fs.access(this.filePath);
+    } catch (e: any) {
+      if (e?.code === 'ENOENT') {
+        this.workbook = XLSX.utils.book_new();
+        return this.workbook;
+      }
+      throw e;
+    }
+    const fileBuffer = await fs.readFile(this.filePath);
+    this.workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+    return this.workbook!;
+  }
+
+  /** 워크북에서 시트 이름 찾기 (대소문자 무시) */
+  private getSheetNameIgnoreCase(workbook: XLSX.WorkBook, want: string): string | null {
+    const wantLower = want.toLowerCase();
+    const found = Object.keys(workbook.Sheets).find((k) => k.toLowerCase() === wantLower);
+    return found ?? null;
+  }
+
+  /**
    * Excel 파일 로드 (로컬 파일 시스템에서)
    * 매 요청마다 파일에서 다시 읽어, Excel에서 삭제/수정한 내용이 목록에 바로 반영되도록 함.
    */
@@ -408,7 +433,8 @@ export class OneDriveLocalService {
   private async readWorksheet(sheetName: string): Promise<any[][]> {
     try {
       const workbook = await this.loadWorkbook();
-      const worksheet = workbook.Sheets[sheetName];
+      const sheetKey = this.getSheetNameIgnoreCase(workbook, sheetName) ?? sheetName;
+      const worksheet = workbook.Sheets[sheetKey];
       
       if (!worksheet) {
         logger.warn(`Worksheet ${sheetName} not found, creating it...`);
@@ -853,7 +879,7 @@ export class OneDriveLocalService {
     if (rows.length < 2) return [];
     
     return rows.slice(1).map(row => ({
-      interviewer_id: row[0] || '',
+      interviewer_id: String(row[0] ?? '').trim(),
       name: row[1] || '',
       email: row[2] || '',
       department: row[3] || '',
@@ -868,7 +894,8 @@ export class OneDriveLocalService {
 
   async getInterviewerById(interviewerId: string): Promise<InterviewerRow | null> {
     const interviewers = await this.getAllInterviewers();
-    const interviewer = interviewers.find(i => i.interviewer_id === interviewerId) || null;
+    const idStr = String(interviewerId ?? '').trim();
+    const interviewer = interviewers.find(i => String(i.interviewer_id ?? '').trim() === idStr) || null;
     // password_hash는 반환하지 않음 (보안)
     if (interviewer) {
       delete (interviewer as any).password_hash;
@@ -929,19 +956,41 @@ export class OneDriveLocalService {
   }
 
   async createOrUpdateInterviewers(interviewers: Omit<InterviewerRow, 'created_at'>[]): Promise<{ created: number; updated: number }> {
-    const rows = await this.readWorksheet('interviewers');
     let created = 0;
     let updated = 0;
     const now = new Date().toISOString();
 
-    const workbook = await this.loadWorkbook();
+    const normalizeId = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const normalizeEmail = (v: unknown) => String(v ?? '').trim().toLowerCase();
+
     await this.acquireLock();
     try {
+      const workbook = await this.loadWorkbookHoldingLock();
+      const sheetKey = this.getSheetNameIgnoreCase(workbook, 'interviewers') ?? 'interviewers';
+      let sheet = workbook.Sheets[sheetKey];
+      let rows: any[][];
+      if (!sheet) {
+        const headers = ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'];
+        workbook.Sheets['interviewers'] = XLSX.utils.aoa_to_sheet([headers]);
+        sheet = workbook.Sheets['interviewers'];
+        rows = [headers];
+      } else {
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+      }
+
       for (const interviewer of interviewers) {
-        const index = rows.findIndex((row, idx) => idx > 0 && row[0] === interviewer.interviewer_id);
-        
+        const idStr = normalizeId(interviewer.interviewer_id);
+        const emailStr = normalizeEmail(interviewer.email);
+        let index = rows.findIndex((row, idx) => idx > 0 && normalizeId(row[0]) === idStr);
+        if (index === -1 && emailStr) {
+          index = rows.findIndex((row, idx) => idx > 0 && normalizeEmail(row[2]) === emailStr);
+          if (index !== -1) {
+            logger.info(`Interviewer matched by email (id not found): email=${emailStr}, rowIndex=${index}`);
+          }
+        }
+
         if (index !== -1) {
-          // 업데이트
+          rows[index][0] = interviewer.interviewer_id;
           rows[index][1] = interviewer.name;
           rows[index][2] = interviewer.email;
           rows[index][3] = interviewer.department;
@@ -949,13 +998,12 @@ export class OneDriveLocalService {
           rows[index][5] = interviewer.is_team_lead ? 'TRUE' : 'FALSE';
           rows[index][6] = interviewer.phone;
           rows[index][7] = interviewer.is_active ? 'TRUE' : 'FALSE';
-          // password_hash는 별도 업데이트 API에서 처리 (보안상)
           if ((interviewer as any).password_hash) {
             rows[index][8] = (interviewer as any).password_hash;
           }
           updated++;
+          logger.info(`Interviewer row updated: id=${idStr}, index=${index}`);
         } else {
-          // 생성
           rows.push([
             interviewer.interviewer_id,
             interviewer.name,
@@ -965,15 +1013,15 @@ export class OneDriveLocalService {
             interviewer.is_team_lead ? 'TRUE' : 'FALSE',
             interviewer.phone,
             interviewer.is_active ? 'TRUE' : 'FALSE',
-            (interviewer as any).password_hash || '', // 비밀번호 해시
+            (interviewer as any).password_hash || '',
             now,
           ]);
           created++;
         }
       }
 
-      workbook.Sheets['interviewers'] = XLSX.utils.aoa_to_sheet(rows);
-      await this.saveWorkbook(true); // 이미 잠금을 획득했으므로 skipLock=true
+      workbook.Sheets[sheetKey] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
     } finally {
       await this.releaseLock();
     }

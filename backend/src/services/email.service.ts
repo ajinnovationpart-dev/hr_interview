@@ -97,8 +97,16 @@ export class EmailService {
 
       try {
         const config = await dataService.getConfig();
+        const smtpUser = process.env.SMTP_USER || '';
+        const smtpUserDomain = smtpUser.split('@')[1] || '';
         if (config.smtp_from_email) {
           fromEmail = config.smtp_from_email;
+          const configFromDomain = fromEmail.split('@')[1] || '';
+          // Gmail 등: 설정 발신자가 SMTP 계정과 도메인이 다르면 수신 서버가 SPF로 거부할 수 있음 → 초기처럼 SMTP_USER로 발송
+          if (smtpUserDomain && configFromDomain && smtpUserDomain !== configFromDomain) {
+            logger.warn(`⚠️ [FROM OVERRIDE] Config 발신자(${fromEmail})와 SMTP 계정(${smtpUser}) 도메인이 달라 수신 실패 가능성이 있어, From을 SMTP_USER로 복구합니다.`);
+            fromEmail = smtpUser;
+          }
         }
         if (config.smtp_from_name) {
           fromName = config.smtp_from_name;

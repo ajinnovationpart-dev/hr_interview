@@ -203,11 +203,15 @@ interviewerRouter.put('/:id/password', adminAuth, async (req: Request, res: Resp
 // 면접관 수정
 interviewerRouter.put('/:id', adminAuth, async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id: paramId } = req.params;
+    let effectiveId = paramId;
     const { name, email, department, position, phone, is_team_lead, is_active } = req.body;
 
-    logger.debug(`Updating interviewer with ID: ${id}`);
-    let existing = await dataService.getInterviewerById(id);
+    logger.info(`PUT interviewer: id=${effectiveId}, name=${name}, email=${email}`);
+    let existing = await dataService.getInterviewerById(effectiveId);
+    if (!existing) {
+      logger.warn(`Interviewer not found by id: ${effectiveId}`);
+    }
     
     // ID로 찾지 못하면 이메일로 찾기 시도
     if (!existing && email) {
@@ -215,8 +219,7 @@ interviewerRouter.put('/:id', adminAuth, async (req: Request, res: Response) => 
       existing = await dataService.getInterviewerByEmail(email);
       if (existing) {
         logger.info(`Found interviewer by email, using existing ID: ${existing.interviewer_id}`);
-        // ID를 기존 ID로 업데이트
-        id = existing.interviewer_id;
+        effectiveId = existing.interviewer_id;
       }
     }
 
@@ -224,16 +227,16 @@ interviewerRouter.put('/:id', adminAuth, async (req: Request, res: Response) => 
       // 디버깅: 모든 면접관 ID 확인
       const allInterviewers = await dataService.getAllInterviewers();
       const allIds = allInterviewers.map(iv => iv.interviewer_id);
-      logger.warn(`Interviewer not found. Requested ID: ${id}, Available IDs: ${allIds.slice(0, 5).join(', ')}...`);
+      logger.warn(`Interviewer not found. Requested ID: ${effectiveId}, Available IDs: ${allIds.slice(0, 5).join(', ')}...`);
       
       // 면접관이 없으면 새로 생성
       if (!name || !email) {
         throw new AppError(400, '면접관을 찾을 수 없고, 이름과 이메일이 없어 새로 생성할 수 없습니다');
       }
       
-      logger.info(`Creating new interviewer with ID: ${id}`);
+      logger.info(`Creating new interviewer with ID: ${effectiveId}`);
       const newInterviewer = {
-        interviewer_id: id,
+        interviewer_id: effectiveId,
         name: name.trim(),
         email: email.trim().toLowerCase(),
         department: department?.trim() || '',
@@ -249,7 +252,7 @@ interviewerRouter.put('/:id', adminAuth, async (req: Request, res: Response) => 
         success: true,
         message: '면접관이 새로 생성되었습니다',
         data: {
-          interviewer_id: id,
+          interviewer_id: effectiveId,
           created: result.created,
           updated: result.updated,
         },
@@ -260,13 +263,13 @@ interviewerRouter.put('/:id', adminAuth, async (req: Request, res: Response) => 
     // 이메일 변경 시 중복 확인
     if (email && email.toLowerCase() !== existing.email.toLowerCase()) {
       const emailExists = await dataService.getInterviewerByEmail(email);
-      if (emailExists && emailExists.interviewer_id !== id) {
+      if (emailExists && emailExists.interviewer_id !== effectiveId) {
         throw new AppError(400, '이미 등록된 이메일입니다');
       }
     }
 
     const interviewer = {
-      interviewer_id: id,
+      interviewer_id: effectiveId,
       name: name?.trim() || existing.name,
       email: email?.trim().toLowerCase() || existing.email,
       department: department?.trim() || existing.department || '',
@@ -277,11 +280,12 @@ interviewerRouter.put('/:id', adminAuth, async (req: Request, res: Response) => 
     };
 
     const result = await dataService.createOrUpdateInterviewers([interviewer]);
+    logger.info(`Interviewer update result: id=${effectiveId}, updated=${result.updated}, created=${result.created}`);
 
     res.json({
       success: true,
       data: {
-        interviewer_id: id,
+        interviewer_id: effectiveId,
         updated: result.updated,
       },
     });

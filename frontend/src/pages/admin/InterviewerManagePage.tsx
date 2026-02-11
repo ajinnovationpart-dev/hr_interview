@@ -103,7 +103,10 @@ export function InterviewerManagePage() {
       const response = await apiA.put(`/interviewers/${id}`, data)
       return response.data
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (import.meta.env.DEV && data?.data) {
+        console.log('✅ 면접관 수정 API 응답:', data.data)
+      }
       message.success('면접관 정보가 수정되었습니다')
       queryClient.invalidateQueries({ queryKey: ['interviewers'] })
       setIsModalOpen(false)
