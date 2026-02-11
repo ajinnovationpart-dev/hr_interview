@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
 import { dataService } from './dataService';
 import { getScheduleButtonImageBuffer } from '../utils/emailButtonImage';
+import { buildFrontendUrl, buildInterviewerLoginLink } from '../utils/frontendUrl';
 
 // 환경 변수 로드
 dotenv.config();
@@ -460,8 +461,9 @@ export class EmailService {
     candidates: string[],
     token: string
   ): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const confirmUrl = `${frontendUrl}/confirm/${token}`;
+    const confirmPath = `/confirm/${token}`;
+    const confirmUrl = buildFrontendUrl(confirmPath);
+    const loginUrl = buildInterviewerLoginLink(confirmPath);
 
     const htmlBody = `
       <!DOCTYPE html>
@@ -508,13 +510,13 @@ export class EmailService {
             </table>
 
             <div style="text-align: center;">
-              <a href="${confirmUrl}" class="button">일정 선택하기</a>
+              <a href="${loginUrl}" class="button">면접관 로그인 후 일정 선택</a>
             </div>
 
             <p style="margin-top: 30px; font-size: 12px; color: #666;">
-              위 링크를 클릭하여 가능한 일정을 선택해 주세요.<br>
-              링크가 작동하지 않는 경우, 아래 URL을 복사하여 브라우저에 붙여넣으세요:<br>
-              ${confirmUrl}
+              링크가 작동하지 않는 경우 아래 주소를 복사해 접속해 주세요.<br>
+              로그인 페이지: ${loginUrl}<br>
+              직접 일정 선택: ${confirmUrl}
             </p>
           </div>
         </div>
@@ -537,8 +539,9 @@ export class EmailService {
     teamName: string,
     token: string
   ): Promise<void> {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const confirmUrl = `${frontendUrl}/confirm/${token}`;
+    const confirmPath = `/confirm/${token}`;
+    const confirmUrl = buildFrontendUrl(confirmPath);
+    const loginUrl = buildInterviewerLoginLink(confirmPath);
 
     const htmlBody = `
       <!DOCTYPE html>
@@ -564,11 +567,13 @@ export class EmailService {
             <p>가능한 일정을 선택해 주시기 바랍니다.</p>
 
             <div style="text-align: center;">
-              <a href="${confirmUrl}" class="button">일정 선택하기</a>
+              <a href="${loginUrl}" class="button">면접관 로그인 후 일정 선택</a>
             </div>
 
             <p style="margin-top: 30px; font-size: 12px; color: #666;">
-              위 링크를 클릭하여 가능한 일정을 선택해 주세요.
+              링크가 작동하지 않는 경우 아래 주소를 복사해 접속해 주세요.<br>
+              로그인 페이지: ${loginUrl}<br>
+              직접 일정 선택: ${confirmUrl}
             </p>
           </div>
         </div>

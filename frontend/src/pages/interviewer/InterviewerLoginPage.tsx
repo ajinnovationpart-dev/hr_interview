@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Form, Input, Button, Card, message } from 'antd'
 import { apiA } from '../../utils/apiA'
 import { useAuthStore } from '../../stores/authStore'
 
 export function InterviewerLoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const setAuth = useAuthStore((state) => state.setAuth)
   const [loading, setLoading] = useState(false)
 
@@ -21,7 +22,13 @@ export function InterviewerLoginPage() {
       })
 
       message.success('로그인 성공')
-      navigate('/interviewer')
+      const redirect = searchParams.get('redirect') || ''
+      // 오픈 리다이렉트 방지: 내부 경로(/...)만 허용
+      if (redirect.startsWith('/')) {
+        navigate(redirect)
+      } else {
+        navigate('/interviewer')
+      }
     } catch (error: any) {
       const msg = error.response?.data?.message
       const isNetwork = !error.response && (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.message === 'Network Error')

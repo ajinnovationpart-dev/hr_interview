@@ -29,6 +29,7 @@ export class EmailTemplateService {
     candidates: Array<{ name: string; positionApplied: string; time: string }>;
     proposedDate: string;
     confirmLink: string;
+    loginLink: string;
   }): string {
     const logoUrl = this.config.company_logo_url || '';
     const companyAddress = this.config.company_address || '';
@@ -224,17 +225,29 @@ export class EmailTemplateService {
 
       <p>가능하신 일정을 선택해 주시기 바랍니다. 제안된 날짜 외에도 다른 날짜와 시간을 선택하실 수 있습니다.</p>
 
-      <!-- 아웃룩 PC 등 호환: 버튼을 이미지로 표시 (cid:scheduleBtn = 첨부 이미지) -->
-      <div style="text-align: center; margin: 40px 0; padding: 30px 0;">
-        <a href="${data.confirmLink}" target="_blank" style="display: inline-block; text-decoration: none;">
-          <img src="cid:scheduleBtn" alt="일정 선택하기" width="220" height="56" style="display: block; border: 0; margin: 0 auto;" />
-        </a>
-        <p style="color: #6b7280; font-size: 12px; margin-top: 8px;">↑ 위 버튼을 클릭하여 일정을 선택해 주세요.</p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+          <tr>
+            <td align="center" bgcolor="#2563eb" style="border-radius: 8px;">
+              <a href="${data.loginLink}" target="_blank" style="display:inline-block;padding:14px 24px;font-size:16px;line-height:1.3;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
+                면접관 로그인 후 일정 선택
+              </a>
+            </td>
+          </tr>
+        </table>
+        <p style="color: #6b7280; font-size: 12px; margin-top: 10px;">메일앱에서 버튼이 동작하지 않으면 아래 링크를 복사해 주세요.</p>
+      </div>
+
+      <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;margin:14px 0;">
+        <p style="margin:0 0 6px 0;font-size:12px;color:#4b5563;"><strong>로그인 페이지</strong></p>
+        <p style="margin:0;word-break:break-all;font-size:12px;"><a href="${data.loginLink}" target="_blank" style="color:#2563eb;text-decoration:underline;">${data.loginLink}</a></p>
+        <p style="margin:10px 0 6px 0;font-size:12px;color:#4b5563;"><strong>직접 일정 선택 링크</strong> (토큰 포함)</p>
+        <p style="margin:0;word-break:break-all;font-size:12px;"><a href="${data.confirmLink}" target="_blank" style="color:#2563eb;text-decoration:underline;">${data.confirmLink}</a></p>
       </div>
 
       <p style="color: #6b7280; font-size: 13px; margin-top: 24px; text-align: center; line-height: 1.6;">
-        48시간 이내에 응답해 주시면 감사하겠습니다.<br>
-        위 링크는 7일간 유효합니다.
+        먼저 로그인한 뒤 일정을 선택해 주세요.<br>
+        링크는 7일간 유효합니다.
       </p>
     </div>
 
@@ -357,6 +370,7 @@ export class EmailTemplateService {
     mainNotice: string;
     teamName: string;
     confirmLink: string;
+    loginLink: string;
     reminderCount: number;
   }): string {
     const urgencyLevel = data.reminderCount >= 2 ? 'HIGH' : 'MEDIUM';
@@ -481,12 +495,23 @@ export class EmailTemplateService {
       
       ${urgencyLevel === 'HIGH' ? '<p style="color: #dc2626; font-weight: 600;">최종 요청입니다. 빠른 시일 내에 응답 부탁드립니다.</p>' : '<p>가능하신 일정을 선택해 주시기 바랍니다.</p>'}
       
-      <!-- 아웃룩 PC 등 호환: 버튼을 이미지로 표시 (cid:scheduleBtn = 첨부 이미지) -->
-      <div style="text-align: center; margin: 40px 0; padding: 30px 0;">
-        <a href="${data.confirmLink}" target="_blank" style="display: inline-block; text-decoration: none;">
-          <img src="cid:scheduleBtn" alt="일정 선택하기" width="220" height="56" style="display: block; border: 0; margin: 0 auto;" />
-        </a>
-        <p style="color: #6b7280; font-size: 12px; margin-top: 8px;">↑ 위 버튼을 클릭하여 일정을 선택해 주세요.</p>
+      <div style="text-align: center; margin: 28px 0 10px 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+          <tr>
+            <td align="center" bgcolor="#2563eb" style="border-radius: 8px;">
+              <a href="${data.loginLink}" target="_blank" style="display:inline-block;padding:14px 24px;font-size:16px;line-height:1.3;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">
+                면접관 로그인 후 일정 선택
+              </a>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;margin:14px 0;">
+        <p style="margin:0 0 6px 0;font-size:12px;color:#4b5563;"><strong>로그인 페이지</strong></p>
+        <p style="margin:0;word-break:break-all;font-size:12px;"><a href="${data.loginLink}" target="_blank" style="color:#2563eb;text-decoration:underline;">${data.loginLink}</a></p>
+        <p style="margin:10px 0 6px 0;font-size:12px;color:#4b5563;"><strong>직접 일정 선택 링크</strong> (토큰 포함)</p>
+        <p style="margin:0;word-break:break-all;font-size:12px;"><a href="${data.confirmLink}" target="_blank" style="color:#2563eb;text-decoration:underline;">${data.confirmLink}</a></p>
       </div>
     </div>
 

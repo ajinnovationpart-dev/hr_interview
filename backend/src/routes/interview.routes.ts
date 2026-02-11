@@ -9,6 +9,7 @@ import { commonSlotService } from '../services/commonSlot.service';
 import { generateJWT } from '../utils/jwt';
 import { calculateEndTime, calculateCandidateSlots, checkMinNoticeHours } from '../utils/timeSlots';
 import { logger } from '../utils/logger';
+import { buildFrontendUrl, buildInterviewerLoginLink } from '../utils/frontendUrl';
 import dayjs from 'dayjs';
 
 export const interviewRouter = Router();
@@ -449,8 +450,8 @@ interviewRouter.get('/:id/portal-link/:interviewerId', adminAuth, async (req: Re
       interviewId,
     });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const portalLink = `${frontendUrl}/confirm/${token}`;
+    const confirmPath = `/confirm/${token}`;
+    const portalLink = buildInterviewerLoginLink(confirmPath);
 
     res.json({
       success: true,
@@ -484,7 +485,6 @@ interviewRouter.post('/:id/remind', adminAuth, async (req: Request, res: Respons
     const allInterviewers = await dataService.getAllInterviewers();
     const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const config = await dataService.getConfig();
     const templateService = new EmailTemplateService({
       company_logo_url: config.company_logo_url,
@@ -518,13 +518,16 @@ interviewRouter.post('/:id/remind', adminAuth, async (req: Request, res: Respons
           interviewId,
         });
 
-        const confirmLink = `${frontendUrl}/confirm/${token}`;
+        const confirmPath = `/confirm/${token}`;
+        const confirmLink = buildFrontendUrl(confirmPath);
+        const loginLink = buildInterviewerLoginLink(confirmPath);
 
         const template = templateService.generateReminderEmail({
           interviewerName: interviewer.name,
           mainNotice: interview.main_notice,
           teamName: interview.team_name,
           confirmLink,
+          loginLink,
           reminderCount: 1,
         });
 
@@ -833,7 +836,6 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
 
     // 면접관별로 이메일 발송 (담당 면접자 정보 포함)
     let emailsSent = 0;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     const emailResults: Array<{
       interviewerId: string;
       name?: string;
@@ -944,7 +946,9 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           interviewId,
         });
 
-        const confirmLink = `${frontendUrl}/confirm/${token}`;
+        const confirmPath = `/confirm/${token}`;
+        const confirmLink = buildFrontendUrl(confirmPath);
+        const loginLink = buildInterviewerLoginLink(confirmPath);
 
         // 메일 템플릿 생성
         const emailContent = templateService.generateInterviewerInvitation({
@@ -954,6 +958,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           candidates: assignedCandidates,
           proposedDate: dayjs(validated.proposedDate).format('YYYY년 MM월 DD일 (ddd)'),
           confirmLink,
+          loginLink,
         });
 
         // 이메일 발송

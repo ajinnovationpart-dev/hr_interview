@@ -6,6 +6,7 @@ import { emailService } from './email.service';
 import { EmailTemplateService } from './emailTemplate.service';
 import { commonSlotService } from './commonSlot.service';
 import { generateJWT } from '../utils/jwt';
+import { buildFrontendUrl, buildInterviewerLoginLink } from '../utils/frontendUrl';
 
 export class SchedulerService {
   private jobs: cron.ScheduledTask[] = [];
@@ -116,8 +117,9 @@ export class SchedulerService {
                 interviewId: interview.interview_id,
               });
 
-              const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-              const confirmLink = `${frontendUrl}/confirm/${token}`;
+              const confirmPath = `/confirm/${token}`;
+              const confirmLink = buildFrontendUrl(confirmPath);
+              const loginLink = buildInterviewerLoginLink(confirmPath);
 
               // 이 면접자가 담당하는 면접자 정보
               const assignedCandidates: Array<{ name: string; positionApplied: string; time: string }> = [];
@@ -161,6 +163,7 @@ export class SchedulerService {
                 mainNotice: interview.main_notice,
                 teamName: interview.team_name,
                 confirmLink,
+                loginLink,
                 reminderCount: currentReminderCount + 1
               });
 
