@@ -114,8 +114,17 @@ export function InterviewCreatePage() {
     return Array.from(byId.values())
   }, [interviewers])
 
+  // 면접 등록 화면에서는 "발송 가능한" 면접관만 노출 (비활성/이메일없음 숨김)
+  const selectableInterviewers = React.useMemo(() => {
+    return normalizedInterviewers.filter((iv: any) => {
+      const active = !!iv?.is_active
+      const hasEmail = !!iv?.email && String(iv.email).trim().length > 0
+      return active && hasEmail
+    })
+  }, [normalizedInterviewers])
+
   // 면접관을 부서별로 그룹화
-  const groupedInterviewers = normalizedInterviewers?.reduce((acc: any, interviewer: any) => {
+  const groupedInterviewers = selectableInterviewers?.reduce((acc: any, interviewer: any) => {
     const department = interviewer.department || '기타'
     if (!acc[department]) {
       acc[department] = []
@@ -153,6 +162,7 @@ export function InterviewCreatePage() {
           </Space>
         ),
         value: normalizeInterviewerId(interviewer.interviewer_id),
+        // selectableInterviewers로 이미 필터링되지만, 방어적으로 disabled 유지
         disabled: !interviewer.is_active || !interviewer.email || !String(interviewer.email).trim(),
         interviewer: interviewer,
       })),
@@ -564,7 +574,9 @@ export function InterviewCreatePage() {
                       maxTagCount="responsive"
                       tagRender={(props) => {
                         const { value, closable, onClose } = props
-                        const interviewer = normalizedInterviewers?.find((iv: any) => normalizeInterviewerId(iv.interviewer_id) === value)
+                        const interviewer =
+                          selectableInterviewers?.find((iv: any) => normalizeInterviewerId(iv.interviewer_id) === value) ||
+                          normalizedInterviewers?.find((iv: any) => normalizeInterviewerId(iv.interviewer_id) === value)
                         return (
                           <Tag
                             color={interviewer?.is_team_lead ? 'red' : 'blue'}
