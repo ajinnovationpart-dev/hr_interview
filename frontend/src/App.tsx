@@ -24,7 +24,6 @@ import { useAuthStore } from './stores/authStore'
 // GitHub Pages 404 후 리다이렉트된 경우 (?/path) URL 정리 및 라우팅 (reload 없이)
 function SPA404Redirect({ basename, isDev }: { basename: string; isDev: boolean }) {
   const navigate = useNavigate()
-  const location = useLocation()
   const done = React.useRef(false)
 
   React.useEffect(() => {
