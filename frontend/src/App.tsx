@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { ChatBot } from './components/ChatBot'
 import { AdminLayout } from './layouts/AdminLayout'
 import { DashboardPage } from './pages/admin/DashboardPage'
@@ -21,6 +21,29 @@ import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import AuthLoginPage from './pages/AuthLoginPage'
 import { useAuthStore } from './stores/authStore'
 
+// GitHub Pages 404 후 리다이렉트된 경우 (?/path) URL 정리 및 라우팅 (reload 없이)
+function SPA404Redirect({ basename, isDev }: { basename: string; isDev: boolean }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const done = React.useRef(false)
+
+  React.useEffect(() => {
+    if (isDev || done.current) return
+    const search = window.location.search
+    const match = search.match(/\?\/(.+)/)
+    const pathFromQuery = match ? match[1].replace(/^\/+/, '') : null
+    if (pathFromQuery) {
+      done.current = true
+      const path = pathFromQuery.startsWith('/') ? pathFromQuery : '/' + pathFromQuery
+      const fullPath = basename.replace(/\/$/, '') + path
+      window.history.replaceState({}, '', fullPath)
+      navigate(path)
+    }
+  }, [isDev, basename, navigate])
+
+  return null
+}
+
 function App() {
   // 개발 환경에서는 항상 '/' 사용, 프로덕션에서만 '/hr_interview/' 사용
   // Vite의 base 설정과 일치시켜야 함
@@ -37,19 +60,7 @@ function App() {
     }
   }, [isDev])
   
-  // 프로덕션 환경에서 쿼리 파라미터로 전달된 경로 처리 (404.html에서 리다이렉트된 경우)
-  React.useEffect(() => {
-    if (!isDev && window.location.search) {
-      const searchParams = new URLSearchParams(window.location.search)
-      const pathParam = searchParams.get('/')
-      if (pathParam) {
-        // 쿼리 파라미터에서 경로 추출하여 리다이렉트
-        const newPath = '/hr_interview' + (pathParam.startsWith('/') ? pathParam : '/' + pathParam)
-        window.history.replaceState({}, '', newPath)
-        window.location.reload()
-      }
-    }
-  }, [isDev])
+  // 프로덕션 404 복구는 Router 내부 컴포넌트에서 처리 (아래 SPA404Redirect)
   
   // 디버깅: basename 로그 출력
   if (import.meta.env.DEV) {
@@ -58,6 +69,7 @@ function App() {
   
   return (
     <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <SPA404Redirect basename={basename} isDev={isDev} />
       <Routes>
         <Route path="/auth/login" element={<AuthLoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
