@@ -49,6 +49,7 @@ export interface IDataService {
   updateInterviewInterviewers(interviewId: string, interviewerIds: string[]): Promise<void>;
   updateRespondedAt(interviewId: string, interviewerId: string): Promise<void>;
   updateReminderSent(interviewId: string, interviewerId: string): Promise<void>;
+  updateScheduleAcceptedAt(interviewId: string, interviewerId: string): Promise<void>;
 
   // Time Selections
   getTimeSelectionsByInterview(interviewId: string): Promise<any[]>;

@@ -421,6 +421,10 @@ export class SharePointExcelService {
     await this.updateCell('interview_interviewers', rowIndex + 1, 4, new Date().toISOString()); // last_reminder_sent_at
   }
 
+  async updateScheduleAcceptedAt(_interviewId: string, _interviewerId: string): Promise<void> {
+    // SharePoint Excel: accepted_at 미지원 (no-op)
+  }
+
   // ========== Time Selections ==========
 
   async getTimeSelectionsByInterview(interviewId: string): Promise<TimeSelectionRow[]> {

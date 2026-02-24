@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import {
   Alert,
@@ -19,6 +19,7 @@ import { getDefaultSlotMinutes, clampTimeToBusinessHours } from '../../utils/bus
 
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
+  const queryClient = useQueryClient()
   const [selectedSlots, setSelectedSlots] = useState<Array<{ date: Dayjs; startTime: Dayjs; endTime: Dayjs }>>([])
 
   const { data, isLoading } = useQuery({
@@ -56,6 +57,20 @@ export function ConfirmPage() {
     },
     onError: (error: any) => {
       message.error(error.response?.data?.message || '일정 선택에 실패했습니다')
+    },
+  })
+
+  const acceptMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiA.post(`/confirm/${token}/accept`)
+      return response.data
+    },
+    onSuccess: () => {
+      message.success('일정 수락이 완료되었습니다')
+      queryClient.invalidateQueries({ queryKey: ['confirm', token] })
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || '일정 수락에 실패했습니다')
     },
   })
 
@@ -128,6 +143,31 @@ export function ConfirmPage() {
           </Descriptions>
         </Card>
 
+        {data.status === 'CONFIRMED' && data.confirmedSchedule && (
+          <Card title="확정된 일정">
+            <Descriptions column={1}>
+              <Descriptions.Item label="날짜">{data.confirmedSchedule.date}</Descriptions.Item>
+              <Descriptions.Item label="시간">
+                {data.confirmedSchedule.startTime} ~ {data.confirmedSchedule.endTime}
+              </Descriptions.Item>
+            </Descriptions>
+            {data.myAcceptedAt ? (
+              <Alert type="success" showIcon message="일정 수락을 완료하셨습니다" style={{ marginTop: 16 }} />
+            ) : (
+              <Button
+                type="primary"
+                size="large"
+                loading={acceptMutation.isPending}
+                onClick={() => acceptMutation.mutate()}
+                style={{ marginTop: 16 }}
+              >
+                일정 수락하기
+              </Button>
+            )}
+          </Card>
+        )}
+
+        {data.status !== 'CONFIRMED' && (
         <Card title="가능한 일정 선택">
           <Space direction="vertical" style={{ width: '100%' }}>
             {data.externalScheduleExists && (
@@ -195,6 +235,7 @@ export function ConfirmPage() {
             </Button>
           </Space>
         </Card>
+        )}
       </Space>
     </div>
   )

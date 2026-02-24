@@ -69,6 +69,24 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
     // 제안 일시·후보명 보강 (dataService는 proposed_* / confirmed_* 만 반환)
     const { proposedDate, proposedStartTime, proposedEndTime, candidateNames } = await getProposedSlotAndCandidates(interviewId, interview);
 
+    // 확정된 일정·일정 수락 여부 (면접이 CONFIRMED일 때)
+    let confirmedSchedule: { date: string; startTime: string; endTime: string } | null = null;
+    let myAcceptedAt: string | null = null;
+    if (interview.status === 'CONFIRMED') {
+      const schedule = await dataService.getConfirmedSchedule(interviewId);
+      if (schedule) {
+        confirmedSchedule = {
+          date: schedule.confirmed_date || '',
+          startTime: schedule.confirmed_start_time || '',
+          endTime: schedule.confirmed_end_time || '',
+        };
+      }
+      const myMapping = mappings.find(m => m.interviewer_id === interviewerId);
+      if (myMapping && (myMapping as any).accepted_at) {
+        myAcceptedAt = (myMapping as any).accepted_at;
+      }
+    }
+
     // 면접관 일정 조회 API: 해당 기간에 일정 있으면 일정 선택 불가
     let externalScheduleExists = false;
     if (interviewerId) {
@@ -93,6 +111,7 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         interviewId: interview.interview_id,
         mainNotice: interview.main_notice,
         teamName: interview.team_name,
+        status: interview.status,
         candidates: candidateNames,
         proposedSlot: {
           date: proposedDate,
@@ -101,6 +120,8 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         },
         responseStatus,
         externalScheduleExists,
+        confirmedSchedule,
+        myAcceptedAt,
       },
     });
   } catch (error) {
@@ -108,6 +129,38 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
       throw error;
     }
     throw new AppError(500, '면접 정보 조회 실패');
+  }
+});
+
+// 확정된 일정 수락 (면접관이 확정 일정에 참석 수락)
+confirmRouter.post('/:token/accept', verifyToken, async (req: Request, res: Response) => {
+  try {
+    const user = req.user!;
+    const interviewId = user.interviewId!;
+    const interviewerId = user.interviewerId!;
+
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    if (interview.status !== 'CONFIRMED') {
+      throw new AppError(400, '일정이 확정된 면접만 수락할 수 있습니다');
+    }
+
+    await dataService.updateScheduleAcceptedAt(interviewId, interviewerId);
+
+    res.json({
+      success: true,
+      data: {
+        message: '일정 수락이 완료되었습니다',
+        acceptedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError(500, '일정 수락 처리 실패');
   }
 });
 

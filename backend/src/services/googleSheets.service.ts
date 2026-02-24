@@ -273,6 +273,10 @@ export class GoogleSheetsService {
     if (!result.success) throw new Error(result.message);
   }
 
+  async updateScheduleAcceptedAt(_interviewId: string, _interviewerId: string): Promise<void> {
+    // Google Sheets 백엔드에서는 미지원 (no-op)
+  }
+
   // ========== Time Selections ==========
 
   async getTimeSelectionsByInterview(interviewId: string): Promise<TimeSelectionRow[]> {

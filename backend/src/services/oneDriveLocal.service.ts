@@ -375,7 +375,7 @@ export class OneDriveLocalService {
       },
       {
         name: 'interview_interviewers',
-        headers: ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at']
+        headers: ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at']
       },
       {
         name: 'time_selections',
@@ -445,7 +445,7 @@ export class OneDriveLocalService {
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
-          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
           'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
           'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
           'config': ['config_key', 'config_value', 'description', 'updated_at'],
@@ -501,7 +501,7 @@ export class OneDriveLocalService {
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
-          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
           'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
           'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
           'config': ['config_key', 'config_value', 'description', 'updated_at'],
@@ -527,7 +527,7 @@ export class OneDriveLocalService {
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
-          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at'],
+          'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
           'time_selections': ['selection_id', 'interview_id', 'interviewer_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
           'confirmed_schedules': ['interview_id', 'candidate_id', 'confirmed_date', 'confirmed_start_time', 'confirmed_end_time', 'confirmed_at'],
           'config': ['config_key', 'config_value', 'description', 'updated_at'],
@@ -1041,6 +1041,7 @@ export class OneDriveLocalService {
         responded_at: row[2] || null,
         reminder_sent_count: Number(row[3]) || 0,
         last_reminder_sent_at: row[4] || null,
+        accepted_at: row[5] || null,
       }));
   }
 
@@ -1051,6 +1052,7 @@ export class OneDriveLocalService {
         mapping.interviewer_id,
         '',
         0,
+        '',
         '',
       ]);
     }
@@ -1097,6 +1099,25 @@ export class OneDriveLocalService {
     }
   }
 
+  async updateScheduleAcceptedAt(interviewId: string, interviewerId: string): Promise<void> {
+    const rows = await this.readWorksheet('interview_interviewers');
+    const index = rows.findIndex((row, idx) => idx > 0 && row[0] === interviewId && row[1] === interviewerId);
+    if (index === -1) {
+      throw new Error(`Mapping not found for interview ${interviewId} and interviewer ${interviewerId}`);
+    }
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      const now = new Date().toISOString();
+      while (rows[index].length < 6) rows[index].push('');
+      rows[index][5] = now; // accepted_at
+      workbook.Sheets['interview_interviewers'] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
   async updateInterviewInterviewers(interviewId: string, interviewerIds: string[]): Promise<void> {
     // 기존 매핑 삭제
     const rows = await this.readWorksheet('interview_interviewers');
@@ -1110,7 +1131,8 @@ export class OneDriveLocalService {
         interviewerId,
         '', // responded_at
         0,  // reminder_sent_count
-        ''  // last_reminder_sent_at
+        '', // last_reminder_sent_at
+        '', // accepted_at
       ]);
     }
     

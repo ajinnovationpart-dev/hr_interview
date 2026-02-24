@@ -834,6 +834,10 @@ export class SharePointRestService {
     await this.saveWorkbook();
   }
 
+  async updateScheduleAcceptedAt(_interviewId: string, _interviewerId: string): Promise<void> {
+    // SharePoint REST: accepted_at 미지원 (no-op)
+  }
+
   async createTimeSelections(selections: TimeSelectionRow[]): Promise<void> {
     for (const selection of selections) {
       await this.appendRow('time_selections', [
