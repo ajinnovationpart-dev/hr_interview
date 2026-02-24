@@ -82,10 +82,29 @@ interviewerPortalRouter.get('/interviews', interviewerAuth, async (req: Request,
             }
           }
         }
+
+        let confirmedSchedule: { date: string; startTime: string; endTime: string } | null = null;
+        let myAcceptedAt: string | null = null;
+        if (interview.status === 'CONFIRMED') {
+          const schedule = await dataService.getConfirmedSchedule(interview.interview_id);
+          if (schedule) {
+            confirmedSchedule = {
+              date: schedule.confirmed_date || '',
+              startTime: schedule.confirmed_start_time || '',
+              endTime: schedule.confirmed_end_time || '',
+            };
+          }
+          const myMapping = interviewInterviewers.find(ii => ii.interviewer_id === interviewerId);
+          if (myMapping && (myMapping as any).accepted_at) {
+            myAcceptedAt = (myMapping as any).accepted_at;
+          }
+        }
         
         interviewerInterviews.push({
           ...interview,
           candidates,
+          confirmedSchedule,
+          myAcceptedAt,
         });
       }
     }
@@ -174,6 +193,46 @@ interviewerPortalRouter.get('/interviews/:interviewId', interviewerAuth, async (
     }
     logger.error('Error getting interviewer interview detail:', error);
     throw new AppError(500, '면접 상세 조회 실패');
+  }
+});
+
+// 확정된 일정 수락 (면접관 포털에서 토큰 없이 호출)
+interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', interviewerAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewerId = req.user?.interviewerId;
+    const { interviewId } = req.params;
+    if (!interviewerId) {
+      throw new AppError(401, '면접관 ID가 없습니다');
+    }
+
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    if (interview.status !== 'CONFIRMED') {
+      throw new AppError(400, '일정이 확정된 면접만 수락할 수 있습니다');
+    }
+
+    const interviewInterviewers = await dataService.getInterviewInterviewers(interviewId);
+    const isParticipating = interviewInterviewers.some(ii => ii.interviewer_id === interviewerId);
+    if (!isParticipating) {
+      throw new AppError(403, '이 면접에 대한 접근 권한이 없습니다');
+    }
+
+    await dataService.updateScheduleAcceptedAt(interviewId, interviewerId);
+
+    res.json({
+      success: true,
+      data: {
+        message: '일정 수락이 완료되었습니다',
+        acceptedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError(500, '일정 수락 처리 실패');
   }
 });
 

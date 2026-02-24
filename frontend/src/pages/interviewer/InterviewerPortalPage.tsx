@@ -17,7 +17,7 @@ import {
   Spin,
   Typography,
 } from 'antd'
-import { DownloadOutlined, EyeOutlined, FormOutlined } from '@ant-design/icons'
+import { DownloadOutlined, EyeOutlined, FormOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { apiA } from '../../utils/apiA'
 
 const { Title, Text } = Typography
@@ -44,6 +44,8 @@ interface Interview {
   proposed_end_time: string
   status: string
   candidates: Candidate[]
+  confirmedSchedule?: { date: string; startTime: string; endTime: string } | null
+  myAcceptedAt?: string | null
 }
 
 export function InterviewerPortalPage() {
@@ -90,6 +92,23 @@ export function InterviewerPortalPage() {
       evalForm.resetFields()
     }
   }, [evaluationData, isEvaluationDrawerOpen, evalForm])
+
+  const acceptScheduleMutation = useMutation({
+    mutationFn: async (interviewId: string) => {
+      const response = await apiA.post(`/interviewer-portal/interviews/${interviewId}/accept-schedule`)
+      return response.data
+    },
+    onSuccess: () => {
+      message.success('일정 수락이 완료되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['interviewer-portal', 'interviews'] })
+      if (selectedInterview) {
+        setSelectedInterview({ ...selectedInterview, myAcceptedAt: new Date().toISOString() })
+      }
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || '일정 수락에 실패했습니다.')
+    },
+  })
 
   const submitEvaluationMutation = useMutation({
     mutationFn: async (values: any) => {
@@ -150,14 +169,20 @@ export function InterviewerPortalPage() {
     {
       title: '면접 일시',
       key: 'datetime',
-      render: (record: Interview) => (
-        <Space direction="vertical" size="small">
-          <Text>{record.proposed_date}</Text>
-          <Text type="secondary">
-            {record.proposed_start_time} ~ {record.proposed_end_time}
-          </Text>
-        </Space>
-      ),
+      render: (record: Interview) => {
+        const date = record.status === 'CONFIRMED' && record.confirmedSchedule
+          ? record.confirmedSchedule.date
+          : record.proposed_date
+        const time = record.status === 'CONFIRMED' && record.confirmedSchedule
+          ? `${record.confirmedSchedule.startTime} ~ ${record.confirmedSchedule.endTime}`
+          : `${record.proposed_start_time} ~ ${record.proposed_end_time}`
+        return (
+          <Space direction="vertical" size="small">
+            <Text>{date}</Text>
+            <Text type="secondary">{time}</Text>
+          </Space>
+        )
+      },
     },
     {
       title: '면접자 수',
@@ -238,11 +263,32 @@ export function InterviewerPortalPage() {
                 {selectedInterview.team_name}
               </Descriptions.Item>
               <Descriptions.Item label="면접 일시">
-                {selectedInterview.proposed_date} {selectedInterview.proposed_start_time} ~ {selectedInterview.proposed_end_time}
+                {selectedInterview.status === 'CONFIRMED' && selectedInterview.confirmedSchedule
+                  ? `${selectedInterview.confirmedSchedule.date} ${selectedInterview.confirmedSchedule.startTime} ~ ${selectedInterview.confirmedSchedule.endTime}`
+                  : `${selectedInterview.proposed_date} ${selectedInterview.proposed_start_time} ~ ${selectedInterview.proposed_end_time}`}
               </Descriptions.Item>
               <Descriptions.Item label="상태">
-                <Tag color="blue">{selectedInterview.status}</Tag>
+                <Tag color={selectedInterview.status === 'CONFIRMED' ? 'green' : selectedInterview.status === 'PENDING' ? 'orange' : 'blue'}>
+                  {selectedInterview.status === 'CONFIRMED' ? '확정' : selectedInterview.status === 'PENDING' ? '대기 중' : selectedInterview.status}
+                </Tag>
               </Descriptions.Item>
+              {selectedInterview.status === 'CONFIRMED' && (
+                <Descriptions.Item label="일정 수락">
+                  {selectedInterview.myAcceptedAt ? (
+                    <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
+                  ) : (
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<CheckCircleOutlined />}
+                      loading={acceptScheduleMutation.isPending}
+                      onClick={() => acceptScheduleMutation.mutate(selectedInterview.interview_id)}
+                    >
+                      일정 수락하기
+                    </Button>
+                  )}
+                </Descriptions.Item>
+              )}
             </Descriptions>
 
             <Title level={4}>면접자 정보</Title>
