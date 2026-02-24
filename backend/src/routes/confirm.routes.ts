@@ -20,6 +20,24 @@ const selectSlotsSchema = z.object({
   })).min(1, '최소 1개의 시간대를 선택해주세요'),
 });
 
+// getInterviewById는 start_datetime/end_datetime/candidates를 반환하지 않음 → 제안일시·후보명 보강
+async function getProposedSlotAndCandidates(interviewId: string, interview: { proposed_date?: string; proposed_start_time?: string; proposed_end_time?: string; confirmed_date?: string; confirmed_start_time?: string; confirmed_end_time?: string }) {
+  const date = interview.confirmed_date || interview.proposed_date || dayjs().format('YYYY-MM-DD');
+  const startTime = interview.confirmed_start_time || interview.proposed_start_time || '09:00';
+  const endTime = interview.confirmed_end_time || interview.proposed_end_time || '18:00';
+  const proposedDate = dayjs(date).format('YYYY-MM-DD');
+  const proposedStartTime = startTime.slice(0, 5);
+  const proposedEndTime = endTime.slice(0, 5);
+  let candidateNames: string[] = [];
+  try {
+    const candidates = await dataService.getCandidatesByInterview(interviewId);
+    candidateNames = candidates.map((c: { name?: string }) => c.name || '').filter(Boolean);
+  } catch {
+    // 무시
+  }
+  return { proposedDate, proposedStartTime, proposedEndTime, candidateNames };
+}
+
 // 면접 정보 조회 (면접관용)
 confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) => {
   try {
@@ -48,10 +66,8 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         }),
     };
 
-    // 제안 일시 파싱
-    const proposedDate = dayjs(interview.start_datetime).format('YYYY-MM-DD');
-    const proposedStartTime = dayjs(interview.start_datetime).format('HH:mm');
-    const proposedEndTime = dayjs(interview.end_datetime).format('HH:mm');
+    // 제안 일시·후보명 보강 (dataService는 proposed_* / confirmed_* 만 반환)
+    const { proposedDate, proposedStartTime, proposedEndTime, candidateNames } = await getProposedSlotAndCandidates(interviewId, interview);
 
     // 면접관 일정 조회 API: 해당 기간에 일정 있으면 일정 선택 불가
     let externalScheduleExists = false;
@@ -77,7 +93,7 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         interviewId: interview.interview_id,
         mainNotice: interview.main_notice,
         teamName: interview.team_name,
-        candidates: interview.candidates ? interview.candidates.split(',').map(c => c.trim()) : [],
+        candidates: candidateNames,
         proposedSlot: {
           date: proposedDate,
           startTime: proposedStartTime,
@@ -115,8 +131,8 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
       throw new AppError(400, '이미 확정된 면접입니다');
     }
 
-    // 면접관 일정 조회 API: 해당 기간에 일정 있으면 제출 불가
-    const proposedDate = dayjs(interview.start_datetime).format('YYYY-MM-DD');
+    // 제안일 보강 (getInterviewById는 start_datetime 미반환)
+    const { proposedDate } = await getProposedSlotAndCandidates(interviewId, interview);
     const interviewer = await dataService.getInterviewerById(interviewerId);
     if (interviewer?.email) {
       const externalScheduleExists = await checkInterviewerHasSchedule(proposedDate, proposedDate, interviewer.email);
@@ -186,7 +202,7 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
           logger.debug('Could not load candidate emails for confirmation:', e);
         }
         const allRecipients = [...new Set([...interviewerEmails, ...candidateEmails])];
-        const candidates = interview.candidates ? interview.candidates.split(',').map((c: string) => c.trim()) : [];
+        const { candidateNames: candidates } = await getProposedSlotAndCandidates(interviewId, interview);
 
         if (allRecipients.length > 0) {
           try {

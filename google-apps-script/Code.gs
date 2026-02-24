@@ -66,6 +66,15 @@ function handleRequest(e) {
       case 'createCandidate':
         result = createCandidate(JSON.parse(e.postData.contents).data);
         break;
+      case 'getCandidateById':
+        result = getCandidateById(e.parameter.candidateId || JSON.parse(e.postData.contents).candidateId);
+        break;
+      case 'updateCandidate':
+        result = updateCandidate(
+          e.parameter.candidateId || JSON.parse(e.postData.contents).candidateId,
+          JSON.parse(e.postData.contents).updates || {}
+        );
+        break;
       
       // Interview-Candidate Mapping
       case 'createInterviewCandidate':
@@ -336,8 +345,32 @@ function getCandidates() {
     email: row[2] || '',
     phone: row[3] || '',
     position_applied: row[4] || '',
-    created_at: row[5] || ''
+    created_at: row[5] || '',
+    status: row[6] || '',
+    resume_url: row[7] || '',
+    notes: row[8] || ''
   }));
+}
+
+function getCandidateById(candidateId) {
+  const candidates = getCandidates();
+  return candidates.find(c => c.candidate_id === candidateId) || null;
+}
+
+function updateCandidate(candidateId, updates) {
+  const sheet = getSheet('candidates');
+  const rows = getDataRows(sheet);
+  const rowIndex = rows.findIndex(row => row[0] === candidateId);
+  if (rowIndex === -1) throw new Error('Candidate not found');
+  const actualRow = rowIndex + 2;
+  if (updates.name !== undefined) sheet.getRange(actualRow, 2).setValue(updates.name);
+  if (updates.email !== undefined) sheet.getRange(actualRow, 3).setValue(updates.email);
+  if (updates.phone !== undefined) sheet.getRange(actualRow, 4).setValue(updates.phone);
+  if (updates.position_applied !== undefined) sheet.getRange(actualRow, 5).setValue(updates.position_applied);
+  if (updates.status !== undefined) sheet.getRange(actualRow, 7).setValue(updates.status);
+  if (updates.resume_url !== undefined) sheet.getRange(actualRow, 8).setValue(updates.resume_url);
+  if (updates.notes !== undefined) sheet.getRange(actualRow, 9).setValue(updates.notes);
+  return { success: true };
 }
 
 function getCandidatesByInterview(interviewId) {
@@ -360,7 +393,10 @@ function createCandidate(data) {
     data.email || '',
     data.phone || '',
     data.position_applied,
-    now
+    now,
+    data.status || '',
+    data.resume_url || '',
+    data.notes || ''
   ]);
   return { candidate_id: data.candidate_id };
 }

@@ -27,6 +27,9 @@ export interface CandidateRow {
   phone: string;
   position_applied: string;
   created_at: string;
+  status?: string;
+  resume_url?: string;
+  notes?: string;
 }
 
 export interface InterviewCandidateRow {
@@ -179,6 +182,21 @@ export class GoogleSheetsService {
   async createCandidate(candidate: Omit<CandidateRow, 'created_at'>): Promise<void> {
     const result = await this.callAPI('createCandidate', { data: candidate }, 'POST');
     if (!result.success) throw new Error(result.message);
+  }
+
+  async getCandidateById(candidateId: string): Promise<CandidateRow | null> {
+    const result = await this.callAPI('getCandidateById', { candidateId });
+    if (!result.success) throw new Error(result.message);
+    return result.data;
+  }
+
+  async updateCandidate(candidateId: string, updates: Record<string, any>): Promise<void> {
+    const result = await this.callAPI('updateCandidate', { candidateId, updates }, 'POST');
+    if (!result.success) throw new Error(result.message);
+  }
+
+  async updateCandidateStatus(candidateId: string, status: string): Promise<void> {
+    await this.updateCandidate(candidateId, { status });
   }
 
   // ========== Interview-Candidate Mapping ==========

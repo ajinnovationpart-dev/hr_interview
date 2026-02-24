@@ -9,8 +9,15 @@ import { logger } from '../utils/logger';
 
 export const resumeRouter = Router();
 
-// 업로드 디렉토리 설정
-const UPLOAD_DIR = process.env.RESUME_UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'resumes');
+// 업로드 디렉토리: OneDrive 사용 시 Excel과 같은 동기화 폴더의 resumes 하위 폴더에 저장
+function getResumeUploadDir(): string {
+  if (process.env.ONEDRIVE_ENABLED === 'true' && process.env.ONEDRIVE_EXCEL_PATH) {
+    const excelDir = path.dirname(path.resolve(process.env.ONEDRIVE_EXCEL_PATH));
+    return path.join(excelDir, 'resumes');
+  }
+  return process.env.RESUME_UPLOAD_DIR || path.join(process.cwd(), 'uploads', 'resumes');
+}
+const UPLOAD_DIR = getResumeUploadDir();
 
 // 업로드 디렉토리 생성 (없으면)
 async function ensureUploadDir() {
