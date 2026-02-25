@@ -169,7 +169,7 @@ export function InterviewerPortalPage() {
     {
       title: '면접 일시',
       key: 'datetime',
-      render: (record: Interview) => {
+      render: (_: unknown, record: Interview) => {
         const hasConfirmedSchedule = (record.status === 'CONFIRMED' || record.status === 'PENDING_APPROVAL') && record.confirmedSchedule
         const date = hasConfirmedSchedule
           ? record.confirmedSchedule!.date
@@ -188,7 +188,7 @@ export function InterviewerPortalPage() {
     {
       title: '면접자 수',
       key: 'candidateCount',
-      render: (record: Interview) => (
+      render: (_: unknown, record: Interview) => (
         <Tag color="blue">{record.candidates?.length || 0}명</Tag>
       ),
     },
@@ -212,7 +212,7 @@ export function InterviewerPortalPage() {
     {
       title: '일정 수락',
       key: 'acceptSchedule',
-      render: (record: Interview) => {
+      render: (_: unknown, record: Interview) => {
         if (record.status === 'PENDING_APPROVAL') {
           return <Text type="secondary">관리자 승인 대기</Text>
         }
@@ -239,7 +239,7 @@ export function InterviewerPortalPage() {
     {
       title: '작업',
       key: 'actions',
-      render: (record: Interview) => (
+      render: (_: unknown, record: Interview) => (
         <Button
           type="link"
           onClick={() => handleViewDetail(record)}
