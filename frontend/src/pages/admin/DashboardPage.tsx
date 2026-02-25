@@ -9,6 +9,7 @@ import type { ColumnsType } from 'antd/es/table'
 interface DashboardStats {
   pending: number
   partial: number
+  pendingApproval?: number
   confirmed: number
   noCommon: number
   scheduled?: number
@@ -34,6 +35,7 @@ interface DashboardData {
 const statusColors: Record<string, string> = {
   PENDING: 'orange',
   PARTIAL: 'blue',
+  PENDING_APPROVAL: 'purple',
   CONFIRMED: 'green',
   NO_COMMON: 'red',
 }
@@ -41,6 +43,7 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   PENDING: '대기 중',
   PARTIAL: '진행 중',
+  PENDING_APPROVAL: '확정 대기',
   CONFIRMED: '완료',
   NO_COMMON: '공통 없음',
 }
@@ -181,12 +184,24 @@ export function DashboardPage() {
                 </Card>
               </Col>
               <Col span={6}>
+                <Card title="확정 대기">
+                  <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#722ed1' }}>
+                    {data.stats.pendingApproval || 0}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 8 }}>
+                    관리자 승인 대기
+                  </div>
+                </Card>
+              </Col>
+              <Col span={6}>
                 <Card title="완료">
                   <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#52c41a' }}>
                     {data.stats.confirmed || 0}
                   </div>
                 </Card>
               </Col>
+            </Row>
+            <Row gutter={16} style={{ marginTop: 16 }}>
               <Col span={6}>
                 <Tooltip title={NO_COMMON_DESCRIPTION}>
                   <Card
@@ -274,6 +289,7 @@ export function DashboardPage() {
                 <Select.Option value="ALL">전체</Select.Option>
                 <Select.Option value="PENDING">대기 중</Select.Option>
                 <Select.Option value="PARTIAL">진행 중</Select.Option>
+                <Select.Option value="PENDING_APPROVAL">확정 대기</Select.Option>
                 <Select.Option value="CONFIRMED">완료</Select.Option>
                 <Select.Option value="NO_COMMON">공통 없음</Select.Option>
               </Select>

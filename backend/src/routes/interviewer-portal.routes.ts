@@ -85,7 +85,7 @@ interviewerPortalRouter.get('/interviews', interviewerAuth, async (req: Request,
 
         let confirmedSchedule: { date: string; startTime: string; endTime: string } | null = null;
         let myAcceptedAt: string | null = null;
-        if (interview.status === 'CONFIRMED') {
+        if (interview.status === 'CONFIRMED' || interview.status === 'PENDING_APPROVAL') {
           const schedule = await dataService.getConfirmedSchedule(interview.interview_id);
           if (schedule) {
             confirmedSchedule = {
@@ -94,9 +94,11 @@ interviewerPortalRouter.get('/interviews', interviewerAuth, async (req: Request,
               endTime: schedule.confirmed_end_time || '',
             };
           }
-          const myMapping = interviewInterviewers.find(ii => ii.interviewer_id === interviewerId);
-          if (myMapping && (myMapping as any).accepted_at) {
-            myAcceptedAt = (myMapping as any).accepted_at;
+          if (interview.status === 'CONFIRMED') {
+            const myMapping = interviewInterviewers.find(ii => ii.interviewer_id === interviewerId);
+            if (myMapping && (myMapping as any).accepted_at) {
+              myAcceptedAt = (myMapping as any).accepted_at;
+            }
           }
         }
         

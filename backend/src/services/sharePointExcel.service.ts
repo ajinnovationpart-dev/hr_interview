@@ -14,7 +14,7 @@ export interface InterviewRow {
   proposed_date: string;
   proposed_start_time: string;
   proposed_end_time: string;
-  status: 'PENDING' | 'PARTIAL' | 'CONFIRMED' | 'NO_COMMON' | 'CANCELLED';
+  status: 'PENDING' | 'PARTIAL' | 'PENDING_APPROVAL' | 'CONFIRMED' | 'NO_COMMON' | 'CANCELLED';
   created_by: string;
   created_at: string;
   updated_at: string;

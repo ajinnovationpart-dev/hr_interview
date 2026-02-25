@@ -238,6 +238,7 @@ interviewRouter.get('/dashboard', adminAuth, async (req: Request, res: Response)
     const stats = {
       pending: interviews.filter(i => i.status === 'PENDING').length,
       partial: interviews.filter(i => i.status === 'PARTIAL').length,
+      pendingApproval: interviews.filter(i => i.status === 'PENDING_APPROVAL').length,
       confirmed: interviews.filter(i => i.status === 'CONFIRMED').length,
       noCommon: interviews.filter(i => i.status === 'NO_COMMON').length,
       scheduled: interviews.filter(i => i.status === 'SCHEDULED').length,
@@ -625,6 +626,69 @@ interviewRouter.post('/:id/retry-schedule', adminAuth, async (req: Request, res:
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(500, '재시도 처리 실패');
+  }
+});
+
+// 관리자 확정 승인: 확정 대기(PENDING_APPROVAL) → CONFIRMED, 확정 메일 발송
+interviewRouter.post('/:id/approve-confirmation', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    if (interview.status !== 'PENDING_APPROVAL') {
+      throw new AppError(400, '확정 대기 상태인 면접만 승인할 수 있습니다');
+    }
+    const schedule = await dataService.getConfirmedSchedule(interviewId);
+    if (!schedule) {
+      throw new AppError(400, '확정 일정이 없습니다');
+    }
+    await dataService.updateInterviewStatus(interviewId, 'CONFIRMED');
+    const mappings = await dataService.getInterviewInterviewers(interviewId);
+    const allInterviewers = await dataService.getAllInterviewers();
+    const interviewerMap = new Map(allInterviewers.map((iv: any) => [iv.interviewer_id, iv]));
+    const interviewerEmails = mappings
+      .map((m: any) => interviewerMap.get(m.interviewer_id)?.email)
+      .filter((e): e is string => !!e?.trim());
+    let candidateEmails: string[] = [];
+    try {
+      const candidatesByInterview = await dataService.getCandidatesByInterview(interviewId);
+      candidateEmails = candidatesByInterview.map((c: any) => c.email).filter((e): e is string => !!e?.trim());
+    } catch (e) {
+      logger.debug('Could not load candidate emails for confirmation:', e);
+    }
+    const allRecipients = [...new Set([...interviewerEmails, ...candidateEmails])];
+    let candidateNames: string[] = [];
+    try {
+      const cs = await dataService.getCandidatesByInterview(interviewId);
+      candidateNames = cs.map((c: any) => c.name || '').filter(Boolean);
+    } catch (e) {
+      logger.debug('Could not load candidate names for confirmation:', e);
+    }
+    if (allRecipients.length > 0) {
+      try {
+        await emailService.sendConfirmationEmail(
+          allRecipients,
+          interview.main_notice,
+          interview.team_name,
+          schedule.confirmed_date || '',
+          schedule.confirmed_start_time || '',
+          schedule.confirmed_end_time || '',
+          candidateNames
+        );
+        logger.info(`[관리자 확정 승인] Confirmation email sent for interview ${interviewId}`);
+      } catch (error: any) {
+        logger.error('[관리자 확정 승인] Failed to send confirmation email:', { interviewId, error: error?.message });
+      }
+    }
+    res.json({
+      success: true,
+      data: { message: '확정 승인되었습니다. 면접관·지원자에게 확정 메일을 발송했습니다.', status: 'CONFIRMED' },
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(500, '확정 승인 처리 실패');
   }
 });
 
@@ -1301,7 +1365,7 @@ interviewRouter.put('/:id/schedule', adminAuth, async (req: Request, res: Respon
       updates.updated_at = new Date().toISOString();
       // #8: 제안 일시 등 변경 시 기존 time_selections 삭제·responded_at 초기화, 미확정 상태면 PENDING으로
       const isScheduleChange = 'proposed_date' in updates || 'proposed_start_time' in updates || 'proposed_end_time' in updates;
-      if (isScheduleChange && ['PENDING', 'PARTIAL', 'NO_COMMON'].includes(interview.status)) {
+      if (isScheduleChange && ['PENDING', 'PARTIAL', 'NO_COMMON', 'PENDING_APPROVAL'].includes(interview.status)) {
         await dataService.deleteTimeSelectionsByInterview(interviewId);
         await dataService.clearRespondedAtByInterview(interviewId);
         updates.status = 'PENDING';
@@ -1672,7 +1736,7 @@ interviewRouter.put('/:id/status', adminAuth, async (req: Request, res: Response
       throw new AppError(400, '상태를 입력해주세요');
     }
     
-    const validStatuses = ['PENDING', 'PARTIAL', 'CONFIRMED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'NO_COMMON'];
+    const validStatuses = ['PENDING', 'PARTIAL', 'PENDING_APPROVAL', 'CONFIRMED', 'SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'NO_COMMON'];
     if (!validStatuses.includes(status)) {
       throw new AppError(400, '올바른 상태를 입력해주세요');
     }
@@ -1684,8 +1748,9 @@ interviewRouter.put('/:id/status', adminAuth, async (req: Request, res: Response
     
     // 상태 전환 검증
     const allowedTransitions: Record<string, string[]> = {
-      'PENDING': ['PARTIAL', 'CONFIRMED', 'CANCELLED', 'NO_COMMON'],
-      'PARTIAL': ['CONFIRMED', 'CANCELLED', 'NO_COMMON'],
+      'PENDING': ['PARTIAL', 'PENDING_APPROVAL', 'CONFIRMED', 'CANCELLED', 'NO_COMMON'],
+      'PARTIAL': ['PENDING_APPROVAL', 'CONFIRMED', 'CANCELLED', 'NO_COMMON'],
+      'PENDING_APPROVAL': ['CONFIRMED', 'CANCELLED'],
       'CONFIRMED': ['SCHEDULED', 'CANCELLED'],
       'SCHEDULED': ['IN_PROGRESS', 'CANCELLED', 'NO_SHOW'],
       'IN_PROGRESS': ['COMPLETED', 'CANCELLED'],

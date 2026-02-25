@@ -311,52 +311,9 @@ export class SchedulerService {
             }
           }
 
-          // 상태 업데이트
-          await dataService.updateInterviewStatus(interview.interview_id, 'CONFIRMED');
-
-          // 확정 메일 발송
-          const allInterviewers = await dataService.getAllInterviewers();
-          const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
-          const interviewerEmails = mappings
-            .map(m => interviewerMap.get(m.interviewer_id)?.email)
-            .filter(Boolean) as string[];
-
-          const config = await dataService.getConfig();
-          const templateService = new EmailTemplateService({
-            company_logo_url: config.company_logo_url,
-            company_address: config.company_address,
-            parking_info: config.parking_info,
-            dress_code: config.dress_code,
-            email_greeting: config.email_greeting,
-            email_company_name: config.email_company_name,
-            email_department_name: config.email_department_name,
-            email_contact_email: config.email_contact_email,
-            email_footer_text: config.email_footer_text,
-          });
-
-          const candidateSchedules = interviewCandidates.map(ic => ({
-            name: candidates.find(c => c.candidate_id === ic.candidate_id)?.name || '',
-            time: `${ic.scheduled_start_time} ~ ${ic.scheduled_end_time}`
-          }));
-
-          try {
-            await emailService.sendEmail({
-              to: interviewerEmails,
-              subject: `[일정 확정] ${interview.main_notice} - ${interview.team_name}`,
-              htmlBody: templateService.generateConfirmationEmail({
-                recipientName: '면접관',
-                recipientType: 'INTERVIEWER',
-                mainNotice: interview.main_notice,
-                teamName: interview.team_name,
-                candidates: candidateSchedules,
-                confirmedDate: dayjs(firstSlot.date).format('YYYY년 MM월 DD일 (ddd)'),
-              }),
-            });
-          } catch (error) {
-            logger.error('Failed to send confirmation email:', error);
-          }
-
-          logger.info(`Interview ${interview.interview_id} auto-confirmed`);
+          // 확정 대기: 관리자 승인 후 CONFIRMED. 확정 메일은 관리자 승인 시 발송
+          await dataService.updateInterviewStatus(interview.interview_id, 'PENDING_APPROVAL');
+          logger.info(`Interview ${interview.interview_id} set to PENDING_APPROVAL (awaiting admin approval)`);
         } else {
           // 공통 일정이 없으면 NO_COMMON 상태로 업데이트
           await dataService.updateInterviewStatus(interview.interview_id, 'NO_COMMON');

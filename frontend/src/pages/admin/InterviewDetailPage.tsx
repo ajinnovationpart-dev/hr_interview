@@ -11,6 +11,7 @@ import type { ColumnsType } from 'antd/es/table'
 const statusColors: Record<string, string> = {
   PENDING: 'orange',
   PARTIAL: 'blue',
+  PENDING_APPROVAL: 'purple',
   CONFIRMED: 'green',
   SCHEDULED: 'green',
   IN_PROGRESS: 'purple',
@@ -23,6 +24,7 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   PENDING: '대기 중',
   PARTIAL: '진행 중',
+  PENDING_APPROVAL: '확정 대기',
   CONFIRMED: '완료',
   SCHEDULED: '예정',
   IN_PROGRESS: '진행중',
@@ -88,6 +90,21 @@ export function InterviewDetailPage() {
     },
     onError: (error: any) => {
       message.error(error.response?.data?.message || 'AI 분석 중 오류가 발생했습니다.')
+    },
+  })
+
+  // 확정 승인 mutation (PENDING_APPROVAL → CONFIRMED)
+  const approveConfirmationMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiA.post(`/interviews/${id}/approve-confirmation`)
+      return response.data
+    },
+    onSuccess: (result: any) => {
+      message.success(result.message || '확정 승인되었습니다. 면접관·지원자에게 확정 메일이 발송됩니다.')
+      queryClient.invalidateQueries({ queryKey: ['interview', id] })
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || '확정 승인 처리 중 오류가 발생했습니다.')
     },
   })
 
@@ -222,6 +239,16 @@ export function InterviewDetailPage() {
               title="면접 정보"
               extra={
                 <Space>
+                  {data.interview.status === 'PENDING_APPROVAL' && (
+                    <Button
+                      type="primary"
+                      icon={<CheckCircleFilled />}
+                      onClick={() => approveConfirmationMutation.mutate()}
+                      loading={approveConfirmationMutation.isPending}
+                    >
+                      확정 승인
+                    </Button>
+                  )}
                   <Button
                     icon={<BellOutlined />}
                     onClick={() => remindMutation.mutate()}
@@ -277,14 +304,21 @@ export function InterviewDetailPage() {
             </Card>
 
             {data.confirmedSchedule && (
-              <Card title="확정 일정">
+              <Card title={data.interview.status === 'PENDING_APPROVAL' ? '확정 예정 일정 (승인 대기)' : '확정 일정'}>
+                {data.interview.status === 'PENDING_APPROVAL' && (
+                  <div style={{ marginBottom: 12, color: '#722ed1' }}>
+                    모든 면접관이 응답하여 확정 대기 상태입니다. 아래 일정으로 확정 승인하면 면접관·지원자에게 확정 메일이 발송됩니다.
+                  </div>
+                )}
                 <Descriptions>
                   <Descriptions.Item label="날짜">{data.confirmedSchedule.confirmed_date}</Descriptions.Item>
                   <Descriptions.Item label="시간">
                     {data.confirmedSchedule.confirmed_start_time} ~ {data.confirmedSchedule.confirmed_end_time}
                   </Descriptions.Item>
                   <Descriptions.Item label="확정 시간">
-                    {new Date(data.confirmedSchedule.confirmed_at).toLocaleString('ko-KR')}
+                    {data.interview.status === 'CONFIRMED'
+                      ? new Date(data.confirmedSchedule.confirmed_at).toLocaleString('ko-KR')
+                      : '-'}
                   </Descriptions.Item>
                 </Descriptions>
               </Card>

@@ -22,6 +22,7 @@ interface Interview {
 const statusColors: Record<string, string> = {
   PENDING: 'orange',
   PARTIAL: 'blue',
+  PENDING_APPROVAL: 'purple',
   CONFIRMED: 'green',
   SCHEDULED: 'green',
   IN_PROGRESS: 'purple',
@@ -34,6 +35,7 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   PENDING: '대기 중',
   PARTIAL: '진행 중',
+  PENDING_APPROVAL: '확정 대기',
   CONFIRMED: '완료',
   SCHEDULED: '예정',
   IN_PROGRESS: '진행중',

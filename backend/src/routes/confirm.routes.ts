@@ -69,10 +69,10 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
     // 제안 일시·후보명 보강 (dataService는 proposed_* / confirmed_* 만 반환)
     const { proposedDate, proposedStartTime, proposedEndTime, candidateNames } = await getProposedSlotAndCandidates(interviewId, interview);
 
-    // 확정된 일정·일정 수락 여부 (면접이 CONFIRMED일 때)
+    // 확정된 일정 (CONFIRMED 또는 확정 대기 PENDING_APPROVAL일 때 표시). 일정 수락 여부는 CONFIRMED일 때만
     let confirmedSchedule: { date: string; startTime: string; endTime: string } | null = null;
     let myAcceptedAt: string | null = null;
-    if (interview.status === 'CONFIRMED') {
+    if (interview.status === 'CONFIRMED' || interview.status === 'PENDING_APPROVAL') {
       const schedule = await dataService.getConfirmedSchedule(interviewId);
       if (schedule) {
         confirmedSchedule = {
@@ -81,9 +81,11 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
           endTime: schedule.confirmed_end_time || '',
         };
       }
-      const myMapping = mappings.find(m => m.interviewer_id === interviewerId);
-      if (myMapping && (myMapping as any).accepted_at) {
-        myAcceptedAt = (myMapping as any).accepted_at;
+      if (interview.status === 'CONFIRMED') {
+        const myMapping = mappings.find(m => m.interviewer_id === interviewerId);
+        if (myMapping && (myMapping as any).accepted_at) {
+          myAcceptedAt = (myMapping as any).accepted_at;
+        }
       }
     }
 
@@ -179,9 +181,12 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
       throw new AppError(404, '면접을 찾을 수 없습니다');
     }
 
-    // 이미 확정된 면접인지 확인
+    // 이미 확정된 면접 또는 확정 대기인지 확인
     if (interview.status === 'CONFIRMED') {
       throw new AppError(400, '이미 확정된 면접입니다');
+    }
+    if (interview.status === 'PENDING_APPROVAL') {
+      throw new AppError(400, '일정이 확정 대기 상태입니다. 관리자 승인 후 확정됩니다.');
     }
 
     // 선택한 각 슬롯(날짜)에 대해 외부 일정 충돌 검사 (#12: 다중 날짜 대응)
@@ -239,47 +244,10 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
           });
         }
 
-        await dataService.updateInterviewStatus(interviewId, 'CONFIRMED');
-        status = 'CONFIRMED';
-        message = '모든 면접관이 응답하여 일정이 확정되었습니다';
-
-        // 확정 메일 발송 (면접관 + 지원자 이메일 있으면 포함)
-        const allInterviewers = await dataService.getAllInterviewers();
-        const interviewerMap = new Map(allInterviewers.map(iv => [iv.interviewer_id, iv]));
-        const interviewerEmails = mappings
-          .map(m => interviewerMap.get(m.interviewer_id)?.email)
-          .filter((e): e is string => !!e?.trim());
-
-        let candidateEmails: string[] = [];
-        try {
-          const candidatesByInterview = await dataService.getCandidatesByInterview(interviewId);
-          candidateEmails = candidatesByInterview.map((c: { email?: string }) => c.email).filter((e): e is string => !!e?.trim());
-        } catch (e) {
-          logger.debug('Could not load candidate emails for confirmation:', e);
-        }
-        const allRecipients = [...new Set([...interviewerEmails, ...candidateEmails])];
-        const { candidateNames: candidates } = await getProposedSlotAndCandidates(interviewId, interview);
-
-        if (allRecipients.length > 0) {
-          try {
-            logger.info(`[일정 확정] Sending confirmation email to ${allRecipients.length} recipient(s) (interviewers: ${interviewerEmails.length}, candidates: ${candidateEmails.length}) for interview ${interviewId}`);
-            await emailService.sendConfirmationEmail(
-              allRecipients,
-              interview.main_notice,
-              interview.team_name,
-              firstSlot.date,
-              firstSlot.startTime,
-              firstSlot.endTime,
-              candidates
-            );
-            logger.info(`[일정 확정] Confirmation email sent successfully for ${interviewId}`);
-          } catch (error: any) {
-            logger.error('[일정 확정] Failed to send confirmation email:', { interviewId, error: error?.message || error, stack: error?.stack });
-            // 이메일 발송 실패해도 일정 확정은 완료
-          }
-        } else {
-          logger.warn(`[일정 확정] No recipient emails (interviewers/candidates) to send confirmation for interview ${interviewId}`);
-        }
+        // 확정 대기: 관리자 승인 후 CONFIRMED로 전환되며, 그때 확정 메일 발송
+        await dataService.updateInterviewStatus(interviewId, 'PENDING_APPROVAL');
+        status = 'PENDING_APPROVAL';
+        message = '모든 면접관이 응답하여 확정 대기 상태입니다. 관리자 승인 후 확정됩니다.';
       } else {
         // 공통 일정이 없으면 즉시 NO_COMMON 전이 (#3)
         await dataService.updateInterviewStatus(interviewId, 'NO_COMMON');

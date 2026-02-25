@@ -170,11 +170,12 @@ export function InterviewerPortalPage() {
       title: '면접 일시',
       key: 'datetime',
       render: (record: Interview) => {
-        const date = record.status === 'CONFIRMED' && record.confirmedSchedule
-          ? record.confirmedSchedule.date
+        const hasConfirmedSchedule = (record.status === 'CONFIRMED' || record.status === 'PENDING_APPROVAL') && record.confirmedSchedule
+        const date = hasConfirmedSchedule
+          ? record.confirmedSchedule!.date
           : record.proposed_date
-        const time = record.status === 'CONFIRMED' && record.confirmedSchedule
-          ? `${record.confirmedSchedule.startTime} ~ ${record.confirmedSchedule.endTime}`
+        const time = hasConfirmedSchedule
+          ? `${record.confirmedSchedule!.startTime} ~ ${record.confirmedSchedule!.endTime}`
           : `${record.proposed_start_time} ~ ${record.proposed_end_time}`
         return (
           <Space direction="vertical" size="small">
@@ -199,6 +200,7 @@ export function InterviewerPortalPage() {
         const statusConfig: Record<string, { color: string; label: string }> = {
           PENDING: { color: 'orange', label: '대기 중' },
           PARTIAL: { color: 'blue', label: '진행 중' },
+          PENDING_APPROVAL: { color: 'purple', label: '확정 대기' },
           CONFIRMED: { color: 'green', label: '확정' },
           CANCELLED: { color: 'red', label: '취소' },
           COMPLETED: { color: 'gray', label: '완료' },
@@ -211,6 +213,9 @@ export function InterviewerPortalPage() {
       title: '일정 수락',
       key: 'acceptSchedule',
       render: (record: Interview) => {
+        if (record.status === 'PENDING_APPROVAL') {
+          return <Text type="secondary">관리자 승인 대기</Text>
+        }
         if (record.status !== 'CONFIRMED') return <Text type="secondary">-</Text>
         if (record.myAcceptedAt) {
           return <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
@@ -287,17 +292,25 @@ export function InterviewerPortalPage() {
                 {selectedInterview.team_name}
               </Descriptions.Item>
               <Descriptions.Item label="면접 일시">
-                {selectedInterview.status === 'CONFIRMED' && selectedInterview.confirmedSchedule
+                {((selectedInterview.status === 'CONFIRMED' || selectedInterview.status === 'PENDING_APPROVAL') && selectedInterview.confirmedSchedule)
                   ? `${selectedInterview.confirmedSchedule.date} ${selectedInterview.confirmedSchedule.startTime} ~ ${selectedInterview.confirmedSchedule.endTime}`
                   : `${selectedInterview.proposed_date} ${selectedInterview.proposed_start_time} ~ ${selectedInterview.proposed_end_time}`}
               </Descriptions.Item>
               <Descriptions.Item label="상태">
-                <Tag color={selectedInterview.status === 'CONFIRMED' ? 'green' : selectedInterview.status === 'PENDING' ? 'orange' : 'blue'}>
-                  {selectedInterview.status === 'CONFIRMED' ? '확정' : selectedInterview.status === 'PENDING' ? '대기 중' : selectedInterview.status}
+                <Tag color={
+                  selectedInterview.status === 'CONFIRMED' ? 'green'
+                    : selectedInterview.status === 'PENDING_APPROVAL' ? 'purple'
+                    : selectedInterview.status === 'PENDING' ? 'orange' : 'blue'
+                }>
+                  {selectedInterview.status === 'CONFIRMED' ? '확정'
+                    : selectedInterview.status === 'PENDING_APPROVAL' ? '확정 대기'
+                    : selectedInterview.status === 'PENDING' ? '대기 중' : selectedInterview.status}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="일정 수락">
-                {selectedInterview.status === 'CONFIRMED' ? (
+                {selectedInterview.status === 'PENDING_APPROVAL' ? (
+                  <Text type="secondary">관리자 승인 대기 중입니다. 확정 후 일정 수락이 가능합니다.</Text>
+                ) : selectedInterview.status === 'CONFIRMED' ? (
                   selectedInterview.myAcceptedAt ? (
                     <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
                   ) : (

@@ -3,10 +3,11 @@
  */
 
 export type InterviewStatus = 
-  | 'PENDING'      // 대기 (면접관 응답 대기)
-  | 'PARTIAL'      // 부분 응답 (일부 면접관만 응답)
-  | 'CONFIRMED'    // 확정 (일정 확정됨)
-  | 'SCHEDULED'    // 예정 (확정 후 대기)
+  | 'PENDING'           // 대기 (면접관 응답 대기)
+  | 'PARTIAL'           // 부분 응답 (일부 면접관만 응답)
+  | 'PENDING_APPROVAL'  // 확정 대기 (면접관 일정 확정됨, 관리자 승인 대기)
+  | 'CONFIRMED'         // 확정 (관리자 확정 승인 완료)
+  | 'SCHEDULED'         // 예정 (확정 후 대기)
   | 'IN_PROGRESS'  // 진행중
   | 'COMPLETED'    // 완료
   | 'CANCELLED'    // 취소
