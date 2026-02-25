@@ -296,9 +296,9 @@ export function InterviewerPortalPage() {
                   {selectedInterview.status === 'CONFIRMED' ? '확정' : selectedInterview.status === 'PENDING' ? '대기 중' : selectedInterview.status}
                 </Tag>
               </Descriptions.Item>
-              {selectedInterview.status === 'CONFIRMED' && (
-                <Descriptions.Item label="일정 수락">
-                  {selectedInterview.myAcceptedAt ? (
+              <Descriptions.Item label="일정 수락">
+                {selectedInterview.status === 'CONFIRMED' ? (
+                  selectedInterview.myAcceptedAt ? (
                     <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
                   ) : (
                     <Button
@@ -310,9 +310,13 @@ export function InterviewerPortalPage() {
                     >
                       일정 수락하기
                     </Button>
-                  )}
-                </Descriptions.Item>
-              )}
+                  )
+                ) : (
+                  <Text type="secondary">
+                    일정이 확정(상태: 확정)되면 이곳에 「일정 수락하기」 버튼이 표시됩니다. 현재는 제안 일시만 있는 상태입니다.
+                  </Text>
+                )}
+              </Descriptions.Item>
             </Descriptions>
 
             <Title level={4}>면접자 정보</Title>
