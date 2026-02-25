@@ -54,6 +54,8 @@ export interface IDataService {
   // Time Selections
   getTimeSelectionsByInterview(interviewId: string): Promise<any[]>;
   createTimeSelections(selections: any[]): Promise<void>;
+  deleteTimeSelectionsByInterview(interviewId: string): Promise<void>;
+  clearRespondedAtByInterview(interviewId: string): Promise<void>;
 
   // Confirmed Schedules
   getConfirmedSchedule(interviewId: string): Promise<any | null>;

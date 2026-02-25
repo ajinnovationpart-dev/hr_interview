@@ -49,6 +49,10 @@ export class SchedulerService {
         const config = await dataService.getConfig();
         const firstReminderHours = parseInt(config.reminder_first_hours || '48');
         const secondReminderHours = parseInt(config.reminder_second_hours || '72');
+        // #6: 2차 리마인더 = 1차 발송 후 N시간. second < first 이면 24시간으로 고정
+        const hoursAfterFirst = secondReminderHours > firstReminderHours
+          ? secondReminderHours - firstReminderHours
+          : 24;
         const maxCount = parseInt(config.reminder_max_count || '2');
 
         const interviews = await dataService.getAllInterviews();
@@ -98,11 +102,10 @@ export class SchedulerService {
           if (currentReminderCount === 0 && hoursSinceCreation >= firstReminderHours) {
             shouldSend = true;
           }
-          // 2차 리마인더 (72시간)
+          // 2차 리마인더: 1차 발송 후 N시간 경과 (N = hoursAfterFirst, 설정 오류 시 24시간)
           else if (currentReminderCount === 1 && lastReminderSentAt) {
             const hoursSinceLastReminder = (now.getTime() - lastReminderSentAt.getTime()) / (1000 * 60 * 60);
-            const hoursBetweenReminders = secondReminderHours - firstReminderHours;
-            if (hoursSinceLastReminder >= hoursBetweenReminders) {
+            if (hoursSinceLastReminder >= hoursAfterFirst) {
               shouldSend = true;
             }
           }

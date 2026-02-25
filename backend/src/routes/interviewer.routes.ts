@@ -306,11 +306,20 @@ interviewerRouter.delete('/:id', adminAuth, async (req: Request, res: Response) 
     logger.debug(`Deleting interviewer with ID: ${id}`);
     const existing = await dataService.getInterviewerById(id);
     if (!existing) {
-      // 디버깅: 모든 면접관 ID 확인
       const allInterviewers = await dataService.getAllInterviewers();
       const allIds = allInterviewers.map(iv => iv.interviewer_id);
       logger.warn(`Interviewer not found. Requested ID: ${id}, Available IDs: ${allIds.join(', ')}`);
       throw new AppError(404, `면접관을 찾을 수 없습니다 (ID: ${id})`);
+    }
+
+    // #11: 진행 중인 면접(PENDING/PARTIAL)에 참여 중이면 비활성화 차단
+    const allInterviews = await dataService.getAllInterviews();
+    const pendingOrPartial = allInterviews.filter(i => i.status === 'PENDING' || i.status === 'PARTIAL');
+    for (const inv of pendingOrPartial) {
+      const mappings = await dataService.getInterviewInterviewers(inv.interview_id);
+      if (mappings.some(m => m.interviewer_id === id)) {
+        throw new AppError(400, '진행 중인 면접(대기/진행 중)에 참여 중인 면접관은 삭제할 수 없습니다. 면접을 취소하거나 해당 면접에서 면접관을 제외한 뒤 다시 시도해 주세요.');
+      }
     }
 
     // 삭제 대신 비활성화

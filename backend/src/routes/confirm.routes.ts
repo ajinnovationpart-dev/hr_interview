@@ -184,13 +184,14 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
       throw new AppError(400, '이미 확정된 면접입니다');
     }
 
-    // 제안일 보강 (getInterviewById는 start_datetime 미반환)
-    const { proposedDate } = await getProposedSlotAndCandidates(interviewId, interview);
+    // 선택한 각 슬롯(날짜)에 대해 외부 일정 충돌 검사 (#12: 다중 날짜 대응)
     const interviewer = await dataService.getInterviewerById(interviewerId);
     if (interviewer?.email) {
-      const externalScheduleExists = await checkInterviewerHasSchedule(proposedDate, proposedDate, interviewer.email);
-      if (externalScheduleExists) {
-        throw new AppError(400, '해당 기간에 이미 일정이 있어 일정 선택을 할 수 없습니다');
+      for (const slot of validated.selectedSlots) {
+        const conflict = await checkInterviewerHasSchedule(slot.date, slot.date, interviewer.email);
+        if (conflict) {
+          throw new AppError(400, `선택한 일정 중 ${slot.date}에 이미 일정이 있어 일정 선택을 할 수 없습니다`);
+        }
       }
     }
 
@@ -223,18 +224,20 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
       const commonSlotsResult = await commonSlotService.findCommonSlots(interviewId);
 
       if (commonSlotsResult.hasCommon && commonSlotsResult.commonSlots.length > 0) {
-        // 공통 일정이 있으면 첫 번째로 확정
+        // 공통 일정이 있으면 첫 번째 30분 블록 날짜 기준, 면접자별 scheduled 시간으로 확정 (#4)
         const firstSlot = commonSlotService.sortSlots(commonSlotsResult.commonSlots)[0];
-
         const confirmedAt = new Date().toISOString();
-        await dataService.createConfirmedSchedule({
-          interview_id: interviewId,
-          candidate_id: '',
-          confirmed_date: firstSlot.date,
-          confirmed_start_time: firstSlot.startTime,
-          confirmed_end_time: firstSlot.endTime,
-          confirmed_at: confirmedAt,
-        });
+        const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
+        for (const ic of interviewCandidates) {
+          await dataService.createConfirmedSchedule({
+            interview_id: interviewId,
+            candidate_id: ic.candidate_id,
+            confirmed_date: firstSlot.date,
+            confirmed_start_time: ic.scheduled_start_time || firstSlot.startTime,
+            confirmed_end_time: ic.scheduled_end_time || firstSlot.endTime,
+            confirmed_at: confirmedAt,
+          });
+        }
 
         await dataService.updateInterviewStatus(interviewId, 'CONFIRMED');
         status = 'CONFIRMED';
@@ -278,9 +281,9 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
           logger.warn(`[일정 확정] No recipient emails (interviewers/candidates) to send confirmation for interview ${interviewId}`);
         }
       } else {
-        // 공통 일정이 없으면 PARTIAL 상태 유지 (나중에 NO_COMMON으로 변경 가능)
-        await dataService.updateInterviewStatus(interviewId, 'PARTIAL');
-        status = 'PARTIAL';
+        // 공통 일정이 없으면 즉시 NO_COMMON 전이 (#3)
+        await dataService.updateInterviewStatus(interviewId, 'NO_COMMON');
+        status = 'NO_COMMON';
         message = '모든 면접관이 응답했지만 공통 일정이 없습니다';
       }
     } else {

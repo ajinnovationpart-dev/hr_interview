@@ -457,20 +457,66 @@ export class SharePointExcelService {
     }
   }
 
+  async deleteTimeSelectionsByInterview(interviewId: string): Promise<void> {
+    const rows = await this.readWorksheet('time_selections');
+    const filtered = rows.filter((row, idx) => idx === 0 || row[1] !== interviewId);
+    await this.writeWorksheet('time_selections', filtered);
+  }
+
+  async clearRespondedAtByInterview(interviewId: string): Promise<void> {
+    const rows = await this.readWorksheet('interview_interviewers');
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === interviewId) {
+        rows[i][2] = '';
+        rows[i][3] = 0;
+        rows[i][4] = '';
+      }
+    }
+    await this.writeWorksheet('interview_interviewers', rows);
+  }
+
+  /** 전체 시트 데이터 덮어쓰기 (Graph API range patch) */
+  private async writeWorksheet(sheetName: string, rows: any[][]): Promise<void> {
+    if (rows.length === 0) return;
+    const rowCount = rows.length;
+    const colCount = Math.max(...rows.map(r => r.length));
+    const colLetter = String.fromCharCode(64 + Math.min(colCount, 26));
+    const address = `A1:${colLetter}${rowCount}`;
+    await this.graphClient
+      .api(`/sites/${this.siteId}/drives/${this.driveId}/items/${this.fileId}/workbook/worksheets('${sheetName}')/range(address='${address}')`)
+      .patch({ values: rows });
+  }
+
   // ========== Confirmed Schedules ==========
 
   async getConfirmedSchedule(interviewId: string): Promise<ConfirmedScheduleRow | null> {
     const rows = await this.readWorksheet('confirmed_schedules');
-    const schedule = rows.find((row, idx) => idx > 0 && row[0] === interviewId);
-    if (!schedule) return null;
-    
+    const schedules = rows.filter((row, idx) => idx > 0 && row[0] === interviewId);
+    if (schedules.length === 0) return null;
+    if (schedules.length === 1) {
+      const s = schedules[0];
+      return {
+        interview_id: s[0] || '',
+        candidate_id: s[1] || '',
+        confirmed_date: s[2] || '',
+        confirmed_start_time: s[3] || '',
+        confirmed_end_time: s[4] || '',
+        confirmed_at: s[5] || '',
+      };
+    }
+    let minStart = schedules[0][3] || '';
+    let maxEnd = schedules[0][4] || '';
+    for (let i = 1; i < schedules.length; i++) {
+      if (String(schedules[i][3]) < minStart) minStart = String(schedules[i][3]);
+      if (String(schedules[i][4]) > maxEnd) maxEnd = String(schedules[i][4]);
+    }
     return {
-      interview_id: schedule[0] || '',
-      candidate_id: schedule[1] || '',
-      confirmed_date: schedule[2] || '',
-      confirmed_start_time: schedule[3] || '',
-      confirmed_end_time: schedule[4] || '',
-      confirmed_at: schedule[5] || '',
+      interview_id: interviewId,
+      candidate_id: '',
+      confirmed_date: String(schedules[0][2]),
+      confirmed_start_time: minStart,
+      confirmed_end_time: maxEnd,
+      confirmed_at: String(schedules[0][5]),
     };
   }
 

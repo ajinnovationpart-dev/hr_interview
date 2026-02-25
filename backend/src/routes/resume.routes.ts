@@ -84,11 +84,18 @@ resumeRouter.post('/upload', adminAuth, upload.single('resume'), async (req: Req
       throw new AppError(400, '이력서 파일을 업로드해주세요');
     }
 
-    const { candidateId } = req.body;
+    const { candidateId, interviewId } = req.body;
     if (!candidateId) {
-      // 업로드된 파일 삭제
       await fs.unlink(req.file.path).catch(() => {});
-      throw new AppError(400, '면접자 ID가 필요합니다');
+      throw new AppError(400, '면접자 ID가 필요합니다. 파일별로 해당 면접자 ID를 명시해 주세요.');
+    }
+    // #5: interviewId 있으면 해당 면접의 면접자인지 검증 (잘못된 매핑 방지)
+    if (interviewId) {
+      const candidates = await dataService.getCandidatesByInterview(interviewId);
+      if (!candidates.some((c: any) => c.candidate_id === candidateId)) {
+        await fs.unlink(req.file.path).catch(() => {});
+        throw new AppError(400, '해당 면접에 속한 면접자 ID가 아닙니다');
+      }
     }
 
     // 파일 URL 생성 (상대 경로)

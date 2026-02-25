@@ -470,6 +470,164 @@ interviewRouter.get('/:id/portal-link/:interviewerId', adminAuth, async (req: Re
   }
 });
 
+// #10: 일정 확인 링크 재발송 (특정 면접관에게 새 토큰으로 이메일 발송)
+interviewRouter.post('/:id/resend-confirm-link', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const { interviewerId } = req.body || {};
+    if (!interviewerId) {
+      throw new AppError(400, 'interviewerId가 필요합니다');
+    }
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    const allInterviewers = await dataService.getAllInterviewers();
+    const interviewer = allInterviewers.find((iv: any) => iv.interviewer_id === interviewerId);
+    if (!interviewer || !interviewer.email) {
+      throw new AppError(404, '면접관을 찾을 수 없습니다');
+    }
+    const config = await dataService.getConfig();
+    const templateService = new EmailTemplateService({
+      company_logo_url: config.company_logo_url,
+      company_address: config.company_address,
+      parking_info: config.parking_info,
+      dress_code: config.dress_code || '비즈니스 캐주얼',
+      email_greeting: config.email_greeting,
+      email_company_name: config.email_company_name,
+      email_department_name: config.email_department_name,
+      email_contact_email: config.email_contact_email,
+      email_footer_text: config.email_footer_text,
+    });
+    const token = generateJWT({
+      email: interviewer.email,
+      role: 'INTERVIEWER',
+      interviewerId: interviewer.interviewer_id,
+      interviewId,
+    });
+    const confirmPath = `/confirm/${token}`;
+    const confirmLink = buildFrontendUrl(confirmPath);
+    const loginLink = buildInterviewerLoginLink(confirmPath);
+    const candidates = await dataService.getCandidatesByInterview(interviewId);
+    const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
+    const assignedCandidates: Array<{ name: string; positionApplied: string; time: string }> = [];
+    for (const c of candidates) {
+      const cis = await dataService.getCandidateInterviewers(interviewId, c.candidate_id);
+      if (cis.some((ci: any) => ci.interviewer_id === interviewerId)) {
+        const ic = interviewCandidates.find((ic: any) => ic.candidate_id === c.candidate_id);
+        assignedCandidates.push({
+          name: c.name,
+          positionApplied: c.position_applied || '',
+          time: ic ? `${ic.scheduled_start_time} ~ ${ic.scheduled_end_time}` : '',
+        });
+      }
+    }
+    const emailContent = templateService.generateInterviewerInvitation({
+      interviewerName: interviewer.name,
+      mainNotice: interview.main_notice,
+      teamName: interview.team_name,
+      candidates: assignedCandidates,
+      proposedDate: dayjs(interview.proposed_date).format('YYYY년 MM월 DD일 (ddd)'),
+      confirmLink,
+      loginLink,
+    });
+    await emailService.sendEmail({
+      to: [interviewer.email],
+      subject: `[일정 확인 링크 재발송] ${interview.main_notice} - ${interview.team_name}`,
+      htmlBody: emailContent,
+    });
+    res.json({
+      success: true,
+      data: { message: '일정 확인 링크가 재발송되었습니다', portalLink: buildInterviewerLoginLink(confirmPath) },
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(500, '링크 재발송 실패');
+  }
+});
+
+// #14: NO_COMMON 재시도 — 슬롯/응답 초기화 후 PENDING으로 되돌리고 일정 확인 메일 재발송
+interviewRouter.post('/:id/retry-schedule', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    if (interview.status !== 'NO_COMMON') {
+      throw new AppError(400, '공통 일정 없음(NO_COMMON) 상태인 면접만 재시도할 수 있습니다');
+    }
+    await dataService.deleteTimeSelectionsByInterview(interviewId);
+    await dataService.clearRespondedAtByInterview(interviewId);
+    await dataService.updateInterviewStatus(interviewId, 'PENDING');
+    const config = await dataService.getConfig();
+    const templateService = new EmailTemplateService({
+      company_logo_url: config.company_logo_url,
+      company_address: config.company_address,
+      parking_info: config.parking_info,
+      dress_code: config.dress_code || '비즈니스 캐주얼',
+      email_greeting: config.email_greeting,
+      email_company_name: config.email_company_name,
+      email_department_name: config.email_department_name,
+      email_contact_email: config.email_contact_email,
+      email_footer_text: config.email_footer_text,
+    });
+    const mappings = await dataService.getInterviewInterviewers(interviewId);
+    const allInterviewers = await dataService.getAllInterviewers();
+    const interviewerMap = new Map(allInterviewers.map((iv: any) => [iv.interviewer_id, iv]));
+    const candidates = await dataService.getCandidatesByInterview(interviewId);
+    const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
+    let sentCount = 0;
+    for (const mapping of mappings) {
+      const interviewer = interviewerMap.get(mapping.interviewer_id);
+      if (!interviewer?.email || !interviewer.is_active) continue;
+      const assignedCandidates: Array<{ name: string; positionApplied: string; time: string }> = [];
+      for (const c of candidates) {
+        const cis = await dataService.getCandidateInterviewers(interviewId, c.candidate_id);
+        if (cis.some((ci: any) => ci.interviewer_id === mapping.interviewer_id)) {
+          const ic = interviewCandidates.find((ic: any) => ic.candidate_id === c.candidate_id);
+          assignedCandidates.push({
+            name: c.name,
+            positionApplied: c.position_applied || '',
+            time: ic ? `${ic.scheduled_start_time} ~ ${ic.scheduled_end_time}` : '',
+          });
+        }
+      }
+      const token = generateJWT({
+        email: interviewer.email,
+        role: 'INTERVIEWER',
+        interviewerId: interviewer.interviewer_id,
+        interviewId,
+      });
+      const confirmPath = `/confirm/${token}`;
+      const confirmLink = buildFrontendUrl(confirmPath);
+      const loginLink = buildInterviewerLoginLink(confirmPath);
+      const emailContent = templateService.generateInterviewerInvitation({
+        interviewerName: interviewer.name,
+        mainNotice: interview.main_notice,
+        teamName: interview.team_name,
+        candidates: assignedCandidates,
+        proposedDate: dayjs(interview.proposed_date).format('YYYY년 MM월 DD일 (ddd)'),
+        confirmLink,
+        loginLink,
+      });
+      await emailService.sendEmail({
+        to: [interviewer.email],
+        subject: `[일정 확인 재요청] ${interview.main_notice} - ${interview.team_name}`,
+        htmlBody: emailContent,
+      });
+      sentCount++;
+    }
+    res.json({
+      success: true,
+      data: { message: '재시도 처리되었습니다. 면접관에게 일정 확인 메일을 다시 발송했습니다.', status: 'PENDING', emailsSent: sentCount },
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(500, '재시도 처리 실패');
+  }
+});
+
 // 리마인더 수동 발송
 interviewRouter.post('/:id/remind', adminAuth, async (req: Request, res: Response) => {
   try {
@@ -642,10 +800,10 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       created_by: user.email,
     });
 
-    // 면접자별 시간 슬롯 계산
+    // 면접자별 시간 슬롯 계산 (id는 candidateId 생성 전 임시 인덱스용)
     const candidateSlots = calculateCandidateSlots(
       validated.proposedStartTime,
-      validated.candidates.map((c, i) => ({ id: `CAND_${i}`, name: c.name })),
+      validated.candidates.map((c, i) => ({ id: `_${i}`, name: c.name })),
       interviewDuration
     );
 
@@ -688,8 +846,8 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       const candidate = validated.candidates[i];
       const slot = candidateSlots[i];
       
-      // 면접자 ID 생성
-      const candidateId = `CAND_${Date.now()}_${i}`;
+      // 면접자 ID 생성 (동일 밀리초 중복 방지를 위해 랜덤 접미사 사용)
+      const candidateId = `CAND_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 9)}`;
       
       // 면접자 정보 저장
       await dataService.createCandidate({
@@ -1141,6 +1299,13 @@ interviewRouter.put('/:id/schedule', adminAuth, async (req: Request, res: Respon
     // 면접 정보 업데이트
     if (Object.keys(updates).length > 0) {
       updates.updated_at = new Date().toISOString();
+      // #8: 제안 일시 등 변경 시 기존 time_selections 삭제·responded_at 초기화, 미확정 상태면 PENDING으로
+      const isScheduleChange = 'proposed_date' in updates || 'proposed_start_time' in updates || 'proposed_end_time' in updates;
+      if (isScheduleChange && ['PENDING', 'PARTIAL', 'NO_COMMON'].includes(interview.status)) {
+        await dataService.deleteTimeSelectionsByInterview(interviewId);
+        await dataService.clearRespondedAtByInterview(interviewId);
+        updates.status = 'PENDING';
+      }
       await dataService.updateInterview(interviewId, updates);
       
       // 변경 이력 기록

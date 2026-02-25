@@ -290,6 +290,14 @@ export class GoogleSheetsService {
     if (!result.success) throw new Error(result.message);
   }
 
+  async deleteTimeSelectionsByInterview(_interviewId: string): Promise<void> {
+    // Google Sheets 백엔드 API에 미구현 시 no-op (OneDrive/SharePoint 사용 시에만 슬롯 초기화 적용)
+  }
+
+  async clearRespondedAtByInterview(_interviewId: string): Promise<void> {
+    // Google Sheets 백엔드 API에 미구현 시 no-op
+  }
+
   // ========== Confirmed Schedules ==========
 
   async getConfirmedSchedule(interviewId: string): Promise<ConfirmedScheduleRow | null> {

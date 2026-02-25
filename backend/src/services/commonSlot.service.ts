@@ -66,46 +66,73 @@ export class CommonSlotService {
     };
   }
 
+  /** 30분 단위(interval) 분 */
+  private static readonly SLOT_INTERVAL_MINUTES = 30;
+
   /**
-   * 여러 면접관의 시간대 목록에서 교집합을 찾습니다.
+   * 하나의 시간대를 30분 단위 서브 슬롯으로 분해합니다.
+   * 예: 09:00~12:00 → [09:00~09:30, 09:30~10:00, ..., 11:30~12:00]
    */
-  private findIntersection(slotGroups: TimeSlot[][]): TimeSlot[] {
-    if (slotGroups.length === 0) return [];
-    if (slotGroups.length === 1) return slotGroups[0];
-
-    // 첫 번째 그룹을 기준으로 시작
-    let common = slotGroups[0];
-
-    // 나머지 그룹들과 교집합 계산
-    for (let i = 1; i < slotGroups.length; i++) {
-      common = this.intersectTwoGroups(common, slotGroups[i]);
-      if (common.length === 0) break; // 공통 시간대가 없으면 조기 종료
+  private expandTo30MinSlots(slot: TimeSlot): TimeSlot[] {
+    const [startH, startM] = slot.startTime.split(':').map(Number);
+    const [endH, endM] = slot.endTime.split(':').map(Number);
+    let startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+    const result: TimeSlot[] = [];
+    while (startMinutes + this.SLOT_INTERVAL_MINUTES <= endMinutes) {
+      const endSlotMinutes = startMinutes + this.SLOT_INTERVAL_MINUTES;
+      const h = Math.floor(startMinutes / 60);
+      const m = startMinutes % 60;
+      const eh = Math.floor(endSlotMinutes / 60);
+      const em = endSlotMinutes % 60;
+      result.push({
+        date: slot.date,
+        startTime: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+        endTime: `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}`,
+      });
+      startMinutes = endSlotMinutes;
     }
-
-    return common;
+    return result;
   }
 
   /**
-   * 두 시간대 그룹의 교집합을 찾습니다.
-   * 날짜, 시작 시간, 종료 시간이 모두 일치해야 공통 시간대로 인정합니다.
+   * 면접관별 슬롯 목록을 각각 30분 단위로 분해한 뒤, 모든 면접관에게 공통인 30분 슬롯의 교집합을 구합니다.
+   * (완전 일치만 인정하던 기존 방식에서, 시간 범위 overlap 방식으로 변경)
    */
-  private intersectTwoGroups(group1: TimeSlot[], group2: TimeSlot[]): TimeSlot[] {
-    const common: TimeSlot[] = [];
-
-    for (const slot1 of group1) {
-      for (const slot2 of group2) {
-        if (
-          slot1.date === slot2.date &&
-          slot1.startTime === slot2.startTime &&
-          slot1.endTime === slot2.endTime
-        ) {
-          common.push(slot1);
-          break; // 중복 방지
+  private findIntersection(slotGroups: TimeSlot[][]): TimeSlot[] {
+    if (slotGroups.length === 0) return [];
+    if (slotGroups.length === 1) {
+      const expanded = new Map<string, TimeSlot>();
+      for (const s of slotGroups[0]) {
+        for (const sub of this.expandTo30MinSlots(s)) {
+          const key = `${sub.date}|${sub.startTime}|${sub.endTime}`;
+          if (!expanded.has(key)) expanded.set(key, sub);
         }
       }
+      return this.sortSlots(Array.from(expanded.values()));
     }
 
-    return common;
+    // 각 그룹을 30분 단위로 분해한 집합으로 변환
+    const sets = slotGroups.map(group => {
+      const set = new Map<string, TimeSlot>();
+      for (const s of group) {
+        for (const sub of this.expandTo30MinSlots(s)) {
+          const key = `${sub.date}|${sub.startTime}|${sub.endTime}`;
+          if (!set.has(key)) set.set(key, sub);
+        }
+      }
+      return set;
+    });
+
+    // 첫 번째 집합의 키 중 모든 집합에 있는 키만 공통
+    const first = sets[0];
+    const common: TimeSlot[] = [];
+    for (const key of first.keys()) {
+      if (sets.every(set => set.has(key))) {
+        common.push(first.get(key)!);
+      }
+    }
+    return this.sortSlots(common);
   }
 
   /**

@@ -1177,9 +1177,59 @@ export class OneDriveLocalService {
     }
   }
 
+  async deleteTimeSelectionsByInterview(interviewId: string): Promise<void> {
+    const rows = await this.readWorksheet('time_selections');
+    const filtered = rows.filter((row, idx) => idx === 0 || row[1] !== interviewId);
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      workbook.Sheets['time_selections'] = XLSX.utils.aoa_to_sheet(filtered);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
+  async clearRespondedAtByInterview(interviewId: string): Promise<void> {
+    const rows = await this.readWorksheet('interview_interviewers');
+    const workbook = await this.loadWorkbook();
+    await this.acquireLock();
+    try {
+      for (let i = 1; i < rows.length; i++) {
+        if (rows[i][0] === interviewId) {
+          rows[i][2] = '';  // responded_at
+          rows[i][3] = 0;   // reminder_sent_count
+          rows[i][4] = '';  // last_reminder_sent_at
+        }
+      }
+      workbook.Sheets['interview_interviewers'] = XLSX.utils.aoa_to_sheet(rows);
+      await this.saveWorkbook(true);
+    } finally {
+      await this.releaseLock();
+    }
+  }
+
   async getConfirmedSchedule(interviewId: string): Promise<ConfirmedScheduleRow | null> {
     const schedules = await this.getConfirmedSchedules(interviewId);
-    return schedules.length > 0 ? schedules[0] : null;
+    if (schedules.length === 0) return null;
+    if (schedules.length === 1) return schedules[0];
+    // 면접자별 여러 행일 때 블록(동일 날짜, 최소 시작, 최대 종료)으로 하나 반환
+    const date = schedules[0].confirmed_date;
+    let minStart = schedules[0].confirmed_start_time;
+    let maxEnd = schedules[0].confirmed_end_time;
+    for (let i = 1; i < schedules.length; i++) {
+      const s = schedules[i];
+      if (s.confirmed_start_time < minStart) minStart = s.confirmed_start_time;
+      if (s.confirmed_end_time > maxEnd) maxEnd = s.confirmed_end_time;
+    }
+    return {
+      interview_id: interviewId,
+      candidate_id: '',
+      confirmed_date: date,
+      confirmed_start_time: minStart,
+      confirmed_end_time: maxEnd,
+      confirmed_at: schedules[0].confirmed_at,
+    };
   }
 
   async getConfirmedSchedulesByCandidate(interviewId: string, candidateId: string): Promise<ConfirmedScheduleRow | null> {
