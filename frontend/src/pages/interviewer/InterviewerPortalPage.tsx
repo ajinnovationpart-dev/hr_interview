@@ -208,6 +208,30 @@ export function InterviewerPortalPage() {
       },
     },
     {
+      title: '일정 수락',
+      key: 'acceptSchedule',
+      render: (record: Interview) => {
+        if (record.status !== 'CONFIRMED') return <Text type="secondary">-</Text>
+        if (record.myAcceptedAt) {
+          return <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
+        }
+        return (
+          <Button
+            type="primary"
+            size="small"
+            icon={<CheckCircleOutlined />}
+            loading={acceptScheduleMutation.isPending}
+            onClick={(e) => {
+              e.stopPropagation()
+              acceptScheduleMutation.mutate(record.interview_id)
+            }}
+          >
+            일정 수락하기
+          </Button>
+        )
+      },
+    },
+    {
       title: '작업',
       key: 'actions',
       render: (record: Interview) => (

@@ -17,6 +17,8 @@ import { CandidateDetailPage } from './pages/admin/CandidateDetailPage'
 import { ConfirmPage } from './pages/interviewer/ConfirmPage'
 import { InterviewerLoginPage } from './pages/interviewer/InterviewerLoginPage'
 import { InterviewerPortalPage } from './pages/interviewer/InterviewerPortalPage'
+import { InterviewerCalendarPage } from './pages/interviewer/InterviewerCalendarPage'
+import { InterviewerLayout } from './layouts/InterviewerLayout'
 import { AuthCallbackPage } from './pages/AuthCallbackPage'
 import AuthLoginPage from './pages/AuthLoginPage'
 import { useAuthStore } from './stores/authStore'
@@ -74,7 +76,11 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="/confirm/:token" element={<ConfirmPage />} />
         <Route path="/interviewer/login" element={<InterviewerLoginPage />} />
-        <Route path="/interviewer" element={<ProtectedInterviewerRoute><InterviewerPortalPage /></ProtectedInterviewerRoute>} />
+        <Route path="/interviewer" element={<ProtectedInterviewerRoute><InterviewerLayout /></ProtectedInterviewerRoute>}>
+          <Route index element={<Navigate to="/interviewer/list" replace />} />
+          <Route path="list" element={<InterviewerPortalPage />} />
+          <Route path="calendar" element={<InterviewerCalendarPage />} />
+        </Route>
         
         <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />

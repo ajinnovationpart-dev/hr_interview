@@ -27,7 +27,7 @@ export function InterviewerLoginPage() {
       if (redirect.startsWith('/')) {
         navigate(redirect)
       } else {
-        navigate('/interviewer')
+        navigate('/interviewer/list')
       }
     } catch (error: any) {
       const msg = error.response?.data?.message
