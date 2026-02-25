@@ -216,24 +216,26 @@ export function InterviewerPortalPage() {
         if (record.status === 'PENDING_APPROVAL') {
           return <Text type="secondary">관리자 승인 대기</Text>
         }
-        if (record.status !== 'CONFIRMED') return <Text type="secondary">-</Text>
         if (record.myAcceptedAt) {
           return <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
         }
-        return (
-          <Button
-            type="primary"
-            size="small"
-            icon={<CheckCircleOutlined />}
-            loading={acceptScheduleMutation.isPending}
-            onClick={(e) => {
-              e.stopPropagation()
-              acceptScheduleMutation.mutate(record.interview_id)
-            }}
-          >
-            일정 수락하기
-          </Button>
-        )
+        if (record.status === 'PENDING' || record.status === 'PARTIAL' || record.status === 'CONFIRMED') {
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              loading={acceptScheduleMutation.isPending}
+              onClick={(e) => {
+                e.stopPropagation()
+                acceptScheduleMutation.mutate(record.interview_id)
+              }}
+            >
+              일정 수락하기
+            </Button>
+          )
+        }
+        return <Text type="secondary">-</Text>
       },
     },
     {
@@ -310,24 +312,20 @@ export function InterviewerPortalPage() {
               <Descriptions.Item label="일정 수락">
                 {selectedInterview.status === 'PENDING_APPROVAL' ? (
                   <Text type="secondary">관리자 승인 대기 중입니다. 확정 후 일정 수락이 가능합니다.</Text>
-                ) : selectedInterview.status === 'CONFIRMED' ? (
-                  selectedInterview.myAcceptedAt ? (
-                    <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
-                  ) : (
-                    <Button
-                      type="primary"
-                      size="small"
-                      icon={<CheckCircleOutlined />}
-                      loading={acceptScheduleMutation.isPending}
-                      onClick={() => acceptScheduleMutation.mutate(selectedInterview.interview_id)}
-                    >
-                      일정 수락하기
-                    </Button>
-                  )
+                ) : selectedInterview.myAcceptedAt ? (
+                  <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
+                ) : (selectedInterview.status === 'PENDING' || selectedInterview.status === 'PARTIAL' || selectedInterview.status === 'CONFIRMED') ? (
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<CheckCircleOutlined />}
+                    loading={acceptScheduleMutation.isPending}
+                    onClick={() => acceptScheduleMutation.mutate(selectedInterview.interview_id)}
+                  >
+                    {selectedInterview.status === 'CONFIRMED' ? '일정 수락하기' : '제안 일정 수락하기'}
+                  </Button>
                 ) : (
-                  <Text type="secondary">
-                    일정이 확정(상태: 확정)되면 이곳에 「일정 수락하기」 버튼이 표시됩니다. 현재는 제안 일시만 있는 상태입니다.
-                  </Text>
+                  <Text type="secondary">-</Text>
                 )}
               </Descriptions.Item>
             </Descriptions>

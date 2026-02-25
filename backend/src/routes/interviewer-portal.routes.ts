@@ -94,11 +94,13 @@ interviewerPortalRouter.get('/interviews', interviewerAuth, async (req: Request,
               endTime: schedule.confirmed_end_time || '',
             };
           }
-          if (interview.status === 'CONFIRMED') {
-            const myMapping = interviewInterviewers.find(ii => ii.interviewer_id === interviewerId);
-            if (myMapping && (myMapping as any).accepted_at) {
-              myAcceptedAt = (myMapping as any).accepted_at;
-            }
+        }
+        const myMapping = interviewInterviewers.find(ii => ii.interviewer_id === interviewerId);
+        if (myMapping) {
+          const acceptedAt = (myMapping as any).accepted_at;
+          const respondedAt = (myMapping as any).responded_at;
+          if (acceptedAt || respondedAt) {
+            myAcceptedAt = acceptedAt || respondedAt;
           }
         }
         
@@ -211,8 +213,10 @@ interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', intervi
     if (!interview) {
       throw new AppError(404, '면접을 찾을 수 없습니다');
     }
-    if (interview.status !== 'CONFIRMED') {
-      throw new AppError(400, '일정이 확정된 면접만 수락할 수 있습니다');
+    // PENDING/PARTIAL: 제안된 일정 수락, CONFIRMED: 확정된 일정 수락
+    const allowedStatuses = ['PENDING', 'PARTIAL', 'CONFIRMED'];
+    if (!allowedStatuses.includes(interview.status)) {
+      throw new AppError(400, '대기 중이거나 확정된 면접만 일정을 수락할 수 있습니다');
     }
 
     const interviewInterviewers = await dataService.getInterviewInterviewers(interviewId);

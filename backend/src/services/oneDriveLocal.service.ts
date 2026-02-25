@@ -1110,6 +1110,7 @@ export class OneDriveLocalService {
     try {
       const now = new Date().toISOString();
       while (rows[index].length < 6) rows[index].push('');
+      if (!rows[index][2]) rows[index][2] = now; // responded_at (제안 일정 수락 시에도 응답한 것으로 처리)
       rows[index][5] = now; // accepted_at
       workbook.Sheets['interview_interviewers'] = XLSX.utils.aoa_to_sheet(rows);
       await this.saveWorkbook(true);
