@@ -21,9 +21,12 @@ async function getProposedSlotsAndCandidates(
   interviewId: string,
   interview: { proposed_date?: string; proposed_start_time?: string; proposed_end_time?: string }
 ) {
-  const rawSlots = await dataService.getProposedSlots(interviewId);
+  const rawSlots = await dataService.getInterviewProposedSlots(interviewId);
   const proposedSlots = rawSlots.length > 0
-    ? rawSlots.map((slot) => ({
+    ? rawSlots
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((slot) => ({
       slotId: slot.slot_id,
       date: slot.slot_date,
       startTime: slot.start_time,
@@ -125,11 +128,6 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         status: interview.status,
         candidates: candidateNames,
         proposedSlots,
-        proposedSlot: {
-          date: proposedSlots[0]?.date || '',
-          startTime: proposedSlots[0]?.startTime || '',
-          endTime: proposedSlots[0]?.endTime || '',
-        },
         responseStatus,
         externalScheduleExists,
         confirmedSchedule,
@@ -199,9 +197,12 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
       throw new AppError(400, '일정이 확정 대기 상태입니다. 관리자 승인 후 확정됩니다.');
     }
 
-    const proposedSlots = await dataService.getProposedSlots(interviewId);
+    const proposedSlots = await dataService.getInterviewProposedSlots(interviewId);
     const proposedSlotsWithFallback = proposedSlots.length > 0
-      ? proposedSlots.map((slot) => ({
+      ? proposedSlots
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((slot) => ({
         slotId: slot.slot_id,
         date: slot.slot_date,
         startTime: slot.start_time,

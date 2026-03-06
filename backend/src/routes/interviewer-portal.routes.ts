@@ -227,6 +227,35 @@ interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', intervi
 
     await dataService.updateScheduleAcceptedAt(interviewId, interviewerId);
 
+    // 제안 일정 수락 흐름: 전원 수락 시 확정 대기로 전환 및 확정 예정 일정 생성
+    if (interview.status === 'PENDING' || interview.status === 'PARTIAL') {
+      const mappingsAfter = await dataService.getInterviewInterviewers(interviewId);
+      const allAccepted = mappingsAfter.length > 0 && mappingsAfter.every(
+        (m: any) => m.responded_at || m.accepted_at
+      );
+      if (allAccepted) {
+        const existingSchedule = await dataService.getConfirmedSchedule(interviewId);
+        if (!existingSchedule) {
+          const confirmedAt = new Date().toISOString();
+          const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
+          const interviewLatest = await dataService.getInterviewById(interviewId);
+          if (interviewLatest) {
+            for (const ic of interviewCandidates) {
+              await dataService.createConfirmedSchedule({
+                interview_id: interviewId,
+                candidate_id: ic.candidate_id,
+                confirmed_date: interviewLatest.proposed_date || '',
+                confirmed_start_time: ic.scheduled_start_time || interviewLatest.proposed_start_time || '',
+                confirmed_end_time: ic.scheduled_end_time || interviewLatest.proposed_end_time || '',
+                confirmed_at: confirmedAt,
+              });
+            }
+            await dataService.updateInterviewStatus(interviewId, 'PENDING_APPROVAL');
+          }
+        }
+      }
+    }
+
     res.json({
       success: true,
       data: {

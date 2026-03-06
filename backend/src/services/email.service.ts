@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import nodemailer from 'nodemailer';
 import { logger } from '../utils/logger';
 import { dataService } from './dataService';
+import type { ProposedSlotRow } from './dataService';
 import { getScheduleButtonImageBuffer } from '../utils/emailButtonImage';
 import { buildFrontendUrl, buildInterviewerLoginLink } from '../utils/frontendUrl';
 
@@ -455,14 +456,13 @@ export class EmailService {
     _interviewId: string,
     mainNotice: string,
     teamName: string,
-    proposedSlots: Array<{ date: string; startTime: string; endTime: string }>,
+    proposedSlots: ProposedSlotRow[],
     candidates: string[],
     token: string
   ): Promise<void> {
     const confirmPath = `/confirm/${token}`;
     const confirmUrl = buildFrontendUrl(confirmPath);
     const loginUrl = buildInterviewerLoginLink(confirmPath);
-
     const htmlBody = `
       <!DOCTYPE html>
       <html>
@@ -505,7 +505,7 @@ export class EmailService {
                 <td>제안 일정 목록</td>
                 <td>
                   <ol style="margin:0;padding-left:18px;">
-                    ${proposedSlots.map((slot) => `<li>${slot.date} ${slot.startTime} ~ ${slot.endTime}</li>`).join('')}
+                    ${proposedSlots.map((slot) => `<li>${slot.slot_date} ${slot.start_time} ~ ${slot.end_time}</li>`).join('')}
                   </ol>
                 </td>
               </tr>
