@@ -1,11 +1,12 @@
 import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Form, Input, DatePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
+import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
 import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import dayjs, { Dayjs } from 'dayjs'
 import { apiA } from '../../utils/apiA'
+import { clampTimeToBusinessHours } from '../../utils/businessHours'
 
 const { Text, Title } = Typography
 
@@ -360,7 +361,7 @@ export function InterviewCreatePage() {
                         minuteStep={30}
                         showNow={false}
                         changeOnScroll
-                        onChange={(time) => time && form.setFieldValue(['proposedSlots', field.name, 'startTime'], clampTimeToBusinessHours(time, config) ?? time)}
+                        onChange={(time: Dayjs | null) => time && form.setFieldValue(['proposedSlots', field.name, 'startTime'], clampTimeToBusinessHours(time, config) ?? time)}
                       />
                     </Form.Item>
                     <Form.Item
@@ -383,7 +384,7 @@ export function InterviewCreatePage() {
                         minuteStep={30}
                         showNow={false}
                         changeOnScroll
-                        onChange={(time) => time && form.setFieldValue(['proposedSlots', field.name, 'endTime'], clampTimeToBusinessHours(time, config) ?? time)}
+                        onChange={(time: Dayjs | null) => time && form.setFieldValue(['proposedSlots', field.name, 'endTime'], clampTimeToBusinessHours(time, config) ?? time)}
                       />
                     </Form.Item>
                   </Space>
@@ -429,7 +430,6 @@ export function InterviewCreatePage() {
                         icon={<MinusCircleOutlined />}
                         onClick={() => {
                           remove(field.name)
-                          calculateEndTime()
                         }}
                       >
                         삭제
@@ -569,7 +569,6 @@ export function InterviewCreatePage() {
                 type="dashed"
                 onClick={() => {
                   add()
-                  calculateEndTime()
                 }}
                 block
                 icon={<PlusOutlined />}
