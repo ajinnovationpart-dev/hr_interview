@@ -18,8 +18,14 @@ export const interviewRouter = Router();
 const createInterviewSchema = z.object({
   mainNotice: z.string().min(1, '공고명을 입력해주세요'),
   teamName: z.string().min(1, '팀명을 입력해주세요'),
-  proposedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)'),
-  proposedStartTime: z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다 (HH:mm)'),
+  proposedSlots: z.array(z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '날짜 형식이 올바르지 않습니다 (YYYY-MM-DD)'),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다 (HH:mm)'),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다 (HH:mm)'),
+  }).refine((slot) => slot.startTime < slot.endTime, {
+    message: '시작 시간은 종료 시간보다 빨라야 합니다',
+    path: ['endTime'],
+  })).min(1, '최소 1개의 제안 일정을 입력해주세요').max(5, '제안 일정은 최대 5개까지 입력 가능합니다'),
   candidates: z.array(z.object({
     name: z.string().min(1, '이름을 입력해주세요'),
     email: z.string().email().optional().or(z.literal('')),
@@ -316,6 +322,7 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
 
     // 시간 선택 조회
     const timeSelections = await dataService.getTimeSelectionsByInterview(interviewId);
+    const proposedSlotsRaw = await dataService.getProposedSlots(interviewId);
     const timeSelectionsWithNames = timeSelections.map(selection => {
       const interviewer = interviewerMap.get(selection.interviewer_id);
       return {
@@ -323,6 +330,19 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
         interviewerName: interviewer?.name || 'Unknown',
       };
     });
+    const proposedSlots = proposedSlotsRaw.length > 0
+      ? proposedSlotsRaw.map((slot) => ({
+        slotId: slot.slot_id,
+        date: slot.slot_date,
+        startTime: slot.start_time,
+        endTime: slot.end_time,
+      }))
+      : [{
+        slotId: 'LEGACY_SLOT_1',
+        date: interview.proposed_date || '',
+        startTime: interview.proposed_start_time || '',
+        endTime: interview.proposed_end_time || '',
+      }];
 
     // 공통 일정 계산
     const commonSlotsResult = await commonSlotService.findCommonSlots(interviewId);
@@ -367,6 +387,7 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
         interview: interviewEnriched,
         responseStatus,
         timeSelections: timeSelectionsWithNames,
+        proposedSlots,
         commonSlots: commonSlotsResult.commonSlots,
         confirmedSchedule,
       },
@@ -629,6 +650,53 @@ interviewRouter.post('/:id/retry-schedule', adminAuth, async (req: Request, res:
   }
 });
 
+// 관리자: 전원 응답 시 확정 대기로 전환 (PENDING/PARTIAL → PENDING_APPROVAL). 이미 전원 수락했는데 상태만 안 바뀐 경우 사용
+interviewRouter.post('/:id/move-to-pending-approval', adminAuth, async (req: Request, res: Response) => {
+  try {
+    const interviewId = req.params.id;
+    const interview = await dataService.getInterviewById(interviewId);
+    if (!interview) {
+      throw new AppError(404, '면접을 찾을 수 없습니다');
+    }
+    if (interview.status !== 'PENDING' && interview.status !== 'PARTIAL') {
+      throw new AppError(400, '대기 중 또는 진행 중 상태인 면접만 확정 대기로 전환할 수 있습니다');
+    }
+    const mappings = await dataService.getInterviewInterviewers(interviewId);
+    const allResponded = mappings.length > 0 && mappings.every((m: any) => m.responded_at || m.accepted_at);
+    if (!allResponded) {
+      throw new AppError(400, '모든 면접관이 일정을 수락한 후에만 확정 대기로 전환할 수 있습니다');
+    }
+    const existingSchedule = await dataService.getConfirmedSchedule(interviewId);
+    if (existingSchedule) {
+      await dataService.updateInterviewStatus(interviewId, 'PENDING_APPROVAL');
+      return res.json({
+        success: true,
+        data: { message: '확정 대기 상태로 전환되었습니다.', status: 'PENDING_APPROVAL' },
+      });
+    }
+    const confirmedAt = new Date().toISOString();
+    const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
+    for (const ic of interviewCandidates) {
+      await dataService.createConfirmedSchedule({
+        interview_id: interviewId,
+        candidate_id: ic.candidate_id,
+        confirmed_date: interview.proposed_date || '',
+        confirmed_start_time: ic.scheduled_start_time || interview.proposed_start_time || '',
+        confirmed_end_time: ic.scheduled_end_time || interview.proposed_end_time || '',
+        confirmed_at: confirmedAt,
+      });
+    }
+    await dataService.updateInterviewStatus(interviewId, 'PENDING_APPROVAL');
+    res.json({
+      success: true,
+      data: { message: '확정 대기 상태로 전환되었습니다. 아래에서 확정 승인을 진행해 주세요.', status: 'PENDING_APPROVAL' },
+    });
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    throw new AppError(500, '확정 대기 전환 처리 실패');
+  }
+});
+
 // 관리자 확정 승인: 확정 대기(PENDING_APPROVAL) → CONFIRMED, 확정 메일 발송
 interviewRouter.post('/:id/approve-confirmation', adminAuth, async (req: Request, res: Response) => {
   try {
@@ -831,6 +899,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
   try {
     const validated = await createInterviewSchema.parseAsync(req.body);
     const user = req.user!;
+    const firstProposedSlot = validated.proposedSlots[0];
 
     // 설정 조회
     const config = await dataService.getConfig();
@@ -838,35 +907,41 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     const minNoticeHours = parseInt(config.min_notice_hours || '0'); // 기본값 0시간 (검증 비활성화)
 
     // 최소 사전 통보 시간 확인 (0시간이면 검증 비활성화)
-    if (minNoticeHours > 0 && !checkMinNoticeHours(validated.proposedDate, validated.proposedStartTime, minNoticeHours)) {
+    if (minNoticeHours > 0 && !checkMinNoticeHours(firstProposedSlot.date, firstProposedSlot.startTime, minNoticeHours)) {
       throw new AppError(400, `면접 일정은 최소 ${minNoticeHours}시간 전에 설정해야 합니다`);
     }
 
     // 면접 ID 생성
     const interviewId = `INT_${Date.now()}`;
 
-    // 종료 시간 자동 계산
-    const proposedEndTime = calculateEndTime(
-      validated.proposedStartTime,
-      validated.candidates.length,
-      interviewDuration
-    );
+    // 하위 호환용: 인터뷰 본 테이블에는 첫 번째 제안 슬롯 저장
+    const proposedEndTime = firstProposedSlot.endTime;
 
     // 면접 기본 정보 저장
     await dataService.createInterview({
       interview_id: interviewId,
       main_notice: validated.mainNotice,
       team_name: validated.teamName,
-      proposed_date: validated.proposedDate,
-      proposed_start_time: validated.proposedStartTime,
+      proposed_date: firstProposedSlot.date,
+      proposed_start_time: firstProposedSlot.startTime,
       proposed_end_time: proposedEndTime,
       status: 'PENDING',
       created_by: user.email,
     });
 
+    // 신규 제안 슬롯 저장
+    await dataService.createProposedSlots(
+      interviewId,
+      validated.proposedSlots.map((slot) => ({
+        slot_date: slot.date,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+      }))
+    );
+
     // 면접자별 시간 슬롯 계산 (id는 candidateId 생성 전 임시 인덱스용)
     const candidateSlots = calculateCandidateSlots(
-      validated.proposedStartTime,
+      firstProposedSlot.startTime,
       validated.candidates.map((c, i) => ({ id: `_${i}`, name: c.name })),
       interviewDuration
     );
@@ -919,7 +994,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
         name: candidate.name,
         email: candidate.email || '',
         phone: candidate.phone || '',
-        position_applied: candidate.position_applied,
+        position_applied: candidate.positionApplied,
       });
 
       // 면접-면접자 매핑
@@ -1154,7 +1229,7 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
             const candidate = validated.candidates.find(c => c.name === candidateSchedule.name);
             assignedCandidates.push({
               name: candidateSchedule.name,
-              positionApplied: candidate?.position_applied || '',
+              positionApplied: candidate?.positionApplied || '',
               time: `${candidateSchedule.startTime} ~ ${candidateSchedule.endTime}`,
             });
           }
@@ -1178,7 +1253,9 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           mainNotice: validated.mainNotice,
           teamName: validated.teamName,
           candidates: assignedCandidates,
-          proposedDate: dayjs(validated.proposedDate).format('YYYY년 MM월 DD일 (ddd)'),
+          proposedDate: validated.proposedSlots
+            .map((slot) => `${dayjs(slot.date).format('YYYY년 MM월 DD일 (ddd)')} ${slot.startTime} ~ ${slot.endTime}`)
+            .join('<br/>'),
           confirmLink,
           loginLink,
         });

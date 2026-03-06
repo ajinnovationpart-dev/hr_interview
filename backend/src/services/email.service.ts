@@ -452,12 +452,10 @@ export class EmailService {
   async sendInterviewInvitation(
     interviewerEmail: string,
     interviewerName: string,
-    interviewId: string,
+    _interviewId: string,
     mainNotice: string,
     teamName: string,
-    proposedDate: string,
-    proposedStartTime: string,
-    proposedEndTime: string,
+    proposedSlots: Array<{ date: string; startTime: string; endTime: string }>,
     candidates: string[],
     token: string
   ): Promise<void> {
@@ -504,8 +502,12 @@ export class EmailService {
                 <td>${candidates.join(', ')}</td>
               </tr>
               <tr>
-                <td>제안 일시</td>
-                <td>${proposedDate} ${proposedStartTime} ~ ${proposedEndTime}</td>
+                <td>제안 일정 목록</td>
+                <td>
+                  <ol style="margin:0;padding-left:18px;">
+                    ${proposedSlots.map((slot) => `<li>${slot.date} ${slot.startTime} ~ ${slot.endTime}</li>`).join('')}
+                  </ol>
+                </td>
               </tr>
             </table>
 

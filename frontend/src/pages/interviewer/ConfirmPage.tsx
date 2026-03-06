@@ -1,26 +1,22 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import {
-  Alert,
-  Card,
-  DatePicker,
-  TimePicker,
-  Button,
-  Space,
-  message,
-  Descriptions,
-  Tag,
-  Spin,
-} from 'antd'
-import dayjs, { Dayjs } from 'dayjs'
+import { Alert, Card, Button, Space, message, Descriptions, Tag, Spin, Checkbox, Typography } from 'antd'
 import { apiA } from '../../utils/apiA'
-import { getDefaultSlotMinutes, clampTimeToBusinessHours } from '../../utils/businessHours'
+
+interface ProposedSlot {
+  slotId: string
+  date: string
+  startTime: string
+  endTime: string
+}
+
+const { Text } = Typography
 
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
   const queryClient = useQueryClient()
-  const [selectedSlots, setSelectedSlots] = useState<Array<{ date: Dayjs; startTime: Dayjs; endTime: Dayjs }>>([])
+  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([])
 
   const { data, isLoading } = useQuery({
     queryKey: ['confirm', token],
@@ -30,26 +26,9 @@ export function ConfirmPage() {
     },
   })
 
-  const { data: config } = useQuery({
-    queryKey: ['config'],
-    queryFn: async () => {
-      try {
-        const response = await apiA.get('/config')
-        return response.data.data
-      } catch {
-        return null
-      }
-    },
-    retry: false,
-  })
-
-  const defaultSlot = getDefaultSlotMinutes(config)
-  const defaultStart = dayjs().hour(Math.floor(defaultSlot.start / 60)).minute(defaultSlot.start % 60).second(0).millisecond(0)
-  const defaultEnd = dayjs().hour(Math.floor(defaultSlot.end / 60)).minute(defaultSlot.end % 60).second(0).millisecond(0)
-
   const mutation = useMutation({
-    mutationFn: async (slots: Array<{ date: string; startTime: string; endTime: string }>) => {
-      const response = await apiA.post(`/confirm/${token}`, { selectedSlots: slots })
+    mutationFn: async (slotIds: string[]) => {
+      const response = await apiA.post(`/confirm/${token}`, { selectedSlotIds: slotIds })
       return response.data
     },
     onSuccess: (data) => {
@@ -74,35 +53,12 @@ export function ConfirmPage() {
     },
   })
 
-  const handleAddSlot = () => {
-    setSelectedSlots([...selectedSlots, { date: dayjs(), startTime: defaultStart, endTime: defaultEnd }])
-  }
-
-  const handleRemoveSlot = (index: number) => {
-    setSelectedSlots(selectedSlots.filter((_, i) => i !== index))
-  }
-
-  const handleUpdateSlot = (index: number, field: 'date' | 'startTime' | 'endTime', value: Dayjs) => {
-    const updated = [...selectedSlots]
-    const clamped =
-      field === 'startTime' || field === 'endTime' ? clampTimeToBusinessHours(value, config) ?? value : value
-    updated[index] = { ...updated[index], [field]: clamped }
-    setSelectedSlots(updated)
-  }
-
   const handleSubmit = () => {
-    if (selectedSlots.length === 0) {
-      message.warning('최소 1개의 시간대를 선택해주세요')
+    if (selectedSlotIds.length === 0) {
+      message.warning('최소 1개의 제안 일정을 선택해주세요')
       return
     }
-
-    const slots = selectedSlots.map(slot => ({
-      date: slot.date.format('YYYY-MM-DD'),
-      startTime: slot.startTime.format('HH:mm'),
-      endTime: slot.endTime.format('HH:mm'),
-    }))
-
-    mutation.mutate(slots)
+    mutation.mutate(selectedSlotIds)
   }
 
   if (isLoading) {
@@ -167,7 +123,16 @@ export function ConfirmPage() {
           </Card>
         )}
 
-        {data.status !== 'CONFIRMED' && (
+        {data.status === 'PENDING_APPROVAL' && (
+          <Alert
+            type="info"
+            showIcon
+            message="현재 일정이 확정 대기 상태입니다."
+            description="관리자 승인 후 확정되면 이 화면에서 일정 수락 상태를 확인할 수 있습니다."
+          />
+        )}
+
+        {data.status !== 'CONFIRMED' && data.status !== 'PENDING_APPROVAL' && (
         <Card title="가능한 일정 선택">
           <Space direction="vertical" style={{ width: '100%' }}>
             {data.externalScheduleExists && (
@@ -179,43 +144,27 @@ export function ConfirmPage() {
                 style={{ marginBottom: 16 }}
               />
             )}
-            {selectedSlots.map((slot, index) => (
-              <Card key={index} size="small">
-                <Space>
-                  <DatePicker
-                    value={slot.date}
-                    onChange={(date) => date && handleUpdateSlot(index, 'date', date)}
-                    disabled={data.externalScheduleExists}
-                  />
-                  <TimePicker
-                    value={clampTimeToBusinessHours(slot.startTime, config) ?? slot.startTime}
-                    format="HH:mm"
-                    minuteStep={30}
-                    showNow={false}
-                    changeOnScroll
-                    onChange={(time) => time && handleUpdateSlot(index, 'startTime', clampTimeToBusinessHours(time, config) ?? time)}
-                    disabled={data.externalScheduleExists}
-                  />
-                  <span>~</span>
-                  <TimePicker
-                    value={clampTimeToBusinessHours(slot.endTime, config) ?? slot.endTime}
-                    format="HH:mm"
-                    minuteStep={30}
-                    showNow={false}
-                    changeOnScroll
-                    onChange={(time) => time && handleUpdateSlot(index, 'endTime', clampTimeToBusinessHours(time, config) ?? time)}
-                    disabled={data.externalScheduleExists}
-                  />
-                  <Button danger onClick={() => handleRemoveSlot(index)} disabled={data.externalScheduleExists}>
-                    삭제
-                  </Button>
+            {((data.proposedSlots || []) as ProposedSlot[]).length === 0 ? (
+              <Alert type="warning" showIcon message="선택 가능한 제안 일정이 없습니다. 관리자에게 문의해 주세요." />
+            ) : (
+              <Checkbox.Group
+                style={{ width: '100%' }}
+                value={selectedSlotIds}
+                onChange={(values) => setSelectedSlotIds(values as string[])}
+                disabled={data.externalScheduleExists}
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {((data.proposedSlots || []) as ProposedSlot[]).map((slot) => (
+                    <Card key={slot.slotId} size="small" style={{ width: '100%' }}>
+                      <Checkbox value={slot.slotId}>
+                        <Text strong>{slot.date}</Text>
+                        <Text style={{ marginLeft: 8 }}>{slot.startTime} ~ {slot.endTime}</Text>
+                      </Checkbox>
+                    </Card>
+                  ))}
                 </Space>
-              </Card>
-            ))}
-
-            <Button type="dashed" onClick={handleAddSlot} block disabled={data.externalScheduleExists}>
-              시간대 추가
-            </Button>
+              </Checkbox.Group>
+            )}
 
             <Button
               type="primary"

@@ -366,6 +366,10 @@ export class OneDriveLocalService {
         headers: ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at']
       },
       {
+        name: 'interview_proposed_slots',
+        headers: ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'created_at']
+      },
+      {
         name: 'candidate_interviewers',
         headers: ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at']
       },
@@ -443,6 +447,7 @@ export class OneDriveLocalService {
           'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
           'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
           'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
@@ -499,6 +504,7 @@ export class OneDriveLocalService {
           'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
           'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
           'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
@@ -655,6 +661,46 @@ export class OneDriveLocalService {
     ]);
   }
 
+  async createProposedSlots(
+    interviewId: string,
+    slots: Array<{ slot_date: string; start_time: string; end_time: string }>
+  ): Promise<void> {
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      await this.appendRow('interview_proposed_slots', [
+        `PS_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+        interviewId,
+        slot.slot_date,
+        slot.start_time,
+        slot.end_time,
+        new Date().toISOString(),
+      ]);
+    }
+  }
+
+  async getProposedSlots(interviewId: string): Promise<Array<{
+    slot_id: string;
+    interview_id: string;
+    slot_date: string;
+    start_time: string;
+    end_time: string;
+    created_at: string;
+  }>> {
+    const rows = await this.readWorksheet('interview_proposed_slots');
+    if (rows.length < 2) return [];
+    return rows
+      .slice(1)
+      .filter((row) => row[1] === interviewId)
+      .map((row) => ({
+        slot_id: row[0] || '',
+        interview_id: row[1] || '',
+        slot_date: row[2] || '',
+        start_time: row[3] || '',
+        end_time: row[4] || '',
+        created_at: row[5] || '',
+      }));
+  }
+
   async updateInterview(interviewId: string, updates: any): Promise<void> {
     const rows = await this.readWorksheet('interviews');
     const index = rows.findIndex((row, idx) => idx > 0 && row[0] === interviewId);
@@ -704,6 +750,11 @@ export class OneDriveLocalService {
       const interviewCandidateRows = await this.readWorksheet('interview_candidates');
       const filteredInterviewCandidateRows = interviewCandidateRows.filter((row, idx) => idx === 0 || row[0] !== interviewId);
       workbook.Sheets['interview_candidates'] = XLSX.utils.aoa_to_sheet(filteredInterviewCandidateRows);
+
+      // interview_proposed_slots 시트에서 삭제
+      const proposedSlotRows = await this.readWorksheet('interview_proposed_slots');
+      const filteredProposedSlotRows = proposedSlotRows.filter((row, idx) => idx === 0 || row[1] !== interviewId);
+      workbook.Sheets['interview_proposed_slots'] = XLSX.utils.aoa_to_sheet(filteredProposedSlotRows);
 
       // candidate_interviewers 시트에서 삭제
       const candidateInterviewerRows = await this.readWorksheet('candidate_interviewers');

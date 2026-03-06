@@ -189,7 +189,7 @@ export class EmailTemplateService {
         <h3>면접 정보</h3>
         <p><strong>공고명:</strong> ${data.mainNotice}</p>
         <p><strong>팀명:</strong> ${data.teamName}</p>
-        <p><strong>제안 일시:</strong> ${data.proposedDate}</p>
+        <p><strong>제안 일정 목록:</strong><br/>${data.proposedDate}</p>
       </div>
 
       <div class="info-box">
@@ -223,7 +223,7 @@ export class EmailTemplateService {
       </div>
       ` : ''}
 
-      <p>가능하신 일정을 선택해 주시기 바랍니다. 제안된 날짜 외에도 다른 날짜와 시간을 선택하실 수 있습니다.</p>
+      <p>아래 제안 일정 중 가능하신 시간을 선택해 주시기 바랍니다.</p>
 
       <div style="text-align: center; margin: 28px 0 10px 0;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">

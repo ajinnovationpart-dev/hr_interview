@@ -9,12 +9,23 @@ import { SharePointRestService } from './sharePointRest.service';
 import { OneDriveLocalService } from './oneDriveLocal.service';
 import { logger } from '../utils/logger';
 
+export interface ProposedSlotRow {
+  slot_id: string;
+  interview_id: string;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+  created_at?: string;
+}
+
 // Google Sheets와 SharePoint Excel의 공통 인터페이스
 export interface IDataService {
   // Interviews
   getAllInterviews(): Promise<any[]>;
   getInterviewById(interviewId: string): Promise<any | null>;
   createInterview(interview: any): Promise<void>;
+  createProposedSlots(interviewId: string, slots: Omit<ProposedSlotRow, 'slot_id' | 'interview_id' | 'created_at'>[]): Promise<void>;
+  getProposedSlots(interviewId: string): Promise<ProposedSlotRow[]>;
   updateInterview(interviewId: string, updates: any): Promise<void>;
   updateInterviewStatus(interviewId: string, status: string): Promise<void>;
   deleteInterview(interviewId: string): Promise<void>;

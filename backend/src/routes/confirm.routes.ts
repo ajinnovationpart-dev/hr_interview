@@ -13,21 +13,28 @@ export const confirmRouter = Router();
 
 // 일정 선택 스키마
 const selectSlotsSchema = z.object({
-  selectedSlots: z.array(z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    startTime: z.string().regex(/^\d{2}:\d{2}$/),
-    endTime: z.string().regex(/^\d{2}:\d{2}$/),
-  })).min(1, '최소 1개의 시간대를 선택해주세요'),
+  selectedSlotIds: z.array(z.string().min(1)).min(1, '최소 1개의 제안 일정을 선택해주세요'),
 });
 
 // getInterviewById는 start_datetime/end_datetime/candidates를 반환하지 않음 → 제안일시·후보명 보강
-async function getProposedSlotAndCandidates(interviewId: string, interview: { proposed_date?: string; proposed_start_time?: string; proposed_end_time?: string; confirmed_date?: string; confirmed_start_time?: string; confirmed_end_time?: string }) {
-  const date = interview.confirmed_date || interview.proposed_date || dayjs().format('YYYY-MM-DD');
-  const startTime = interview.confirmed_start_time || interview.proposed_start_time || '09:00';
-  const endTime = interview.confirmed_end_time || interview.proposed_end_time || '18:00';
-  const proposedDate = dayjs(date).format('YYYY-MM-DD');
-  const proposedStartTime = startTime.slice(0, 5);
-  const proposedEndTime = endTime.slice(0, 5);
+async function getProposedSlotsAndCandidates(
+  interviewId: string,
+  interview: { proposed_date?: string; proposed_start_time?: string; proposed_end_time?: string }
+) {
+  const rawSlots = await dataService.getProposedSlots(interviewId);
+  const proposedSlots = rawSlots.length > 0
+    ? rawSlots.map((slot) => ({
+      slotId: slot.slot_id,
+      date: slot.slot_date,
+      startTime: slot.start_time,
+      endTime: slot.end_time,
+    }))
+    : [{
+      slotId: 'LEGACY_SLOT_1',
+      date: dayjs(interview.proposed_date || dayjs().format('YYYY-MM-DD')).format('YYYY-MM-DD'),
+      startTime: (interview.proposed_start_time || '09:00').slice(0, 5),
+      endTime: (interview.proposed_end_time || '18:00').slice(0, 5),
+    }];
   let candidateNames: string[] = [];
   try {
     const candidates = await dataService.getCandidatesByInterview(interviewId);
@@ -35,7 +42,7 @@ async function getProposedSlotAndCandidates(interviewId: string, interview: { pr
   } catch {
     // 무시
   }
-  return { proposedDate, proposedStartTime, proposedEndTime, candidateNames };
+  return { proposedSlots, candidateNames };
 }
 
 // 면접 정보 조회 (면접관용)
@@ -66,8 +73,8 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         }),
     };
 
-    // 제안 일시·후보명 보강 (dataService는 proposed_* / confirmed_* 만 반환)
-    const { proposedDate, proposedStartTime, proposedEndTime, candidateNames } = await getProposedSlotAndCandidates(interviewId, interview);
+    // 제안 일정·후보명 보강
+    const { proposedSlots, candidateNames } = await getProposedSlotsAndCandidates(interviewId, interview);
 
     // 확정된 일정 (CONFIRMED 또는 확정 대기 PENDING_APPROVAL일 때 표시). 일정 수락 여부는 CONFIRMED일 때만
     let confirmedSchedule: { date: string; startTime: string; endTime: string } | null = null;
@@ -96,11 +103,13 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
       const email = interviewer?.email;
       if (email) {
         try {
-          externalScheduleExists = await checkInterviewerHasSchedule(
-            proposedDate,
-            proposedDate,
-            email
-          );
+          for (const slot of proposedSlots) {
+            const conflict = await checkInterviewerHasSchedule(slot.date, slot.date, email);
+            if (conflict) {
+              externalScheduleExists = true;
+              break;
+            }
+          }
         } catch (e) {
           logger.warn('Interviewer schedule check failed', { error: e instanceof Error ? e.message : String(e) });
         }
@@ -115,10 +124,11 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         teamName: interview.team_name,
         status: interview.status,
         candidates: candidateNames,
+        proposedSlots,
         proposedSlot: {
-          date: proposedDate,
-          startTime: proposedStartTime,
-          endTime: proposedEndTime,
+          date: proposedSlots[0]?.date || '',
+          startTime: proposedSlots[0]?.startTime || '',
+          endTime: proposedSlots[0]?.endTime || '',
         },
         responseStatus,
         externalScheduleExists,
@@ -189,10 +199,31 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
       throw new AppError(400, '일정이 확정 대기 상태입니다. 관리자 승인 후 확정됩니다.');
     }
 
-    // 선택한 각 슬롯(날짜)에 대해 외부 일정 충돌 검사 (#12: 다중 날짜 대응)
+    const proposedSlots = await dataService.getProposedSlots(interviewId);
+    const proposedSlotsWithFallback = proposedSlots.length > 0
+      ? proposedSlots.map((slot) => ({
+        slotId: slot.slot_id,
+        date: slot.slot_date,
+        startTime: slot.start_time,
+        endTime: slot.end_time,
+      }))
+      : [{
+        slotId: 'LEGACY_SLOT_1',
+        date: interview.proposed_date || '',
+        startTime: interview.proposed_start_time || '',
+        endTime: interview.proposed_end_time || '',
+      }];
+
+    const slotMap = new Map(proposedSlotsWithFallback.map((slot) => [slot.slotId, slot]));
+    const selectedSlots = validated.selectedSlotIds.map((slotId) => slotMap.get(slotId)).filter(Boolean);
+    if (selectedSlots.length !== validated.selectedSlotIds.length) {
+      throw new AppError(400, '선택한 일정 중 유효하지 않은 슬롯이 포함되어 있습니다');
+    }
+
+    // 선택한 각 슬롯(날짜)에 대해 외부 일정 충돌 검사
     const interviewer = await dataService.getInterviewerById(interviewerId);
     if (interviewer?.email) {
-      for (const slot of validated.selectedSlots) {
+      for (const slot of selectedSlots) {
         const conflict = await checkInterviewerHasSchedule(slot.date, slot.date, interviewer.email);
         if (conflict) {
           throw new AppError(400, `선택한 일정 중 ${slot.date}에 이미 일정이 있어 일정 선택을 할 수 없습니다`);
@@ -202,7 +233,7 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
 
     // 시간 선택 저장
     const now = Date.now();
-    const selections = validated.selectedSlots.map((slot, index) => ({
+    const selections = selectedSlots.map((slot, index) => ({
       selection_id: `SEL_${now}_${index}`,
       interview_id: interviewId,
       interviewer_id: interviewerId,

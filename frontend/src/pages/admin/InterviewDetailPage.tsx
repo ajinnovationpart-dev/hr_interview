@@ -108,6 +108,21 @@ export function InterviewDetailPage() {
     },
   })
 
+  // 확정 대기로 전환 (전원 수락했는데 상태만 대기 중인 경우)
+  const moveToPendingApprovalMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiA.post(`/interviews/${id}/move-to-pending-approval`)
+      return response.data
+    },
+    onSuccess: (result: any) => {
+      message.success(result.message || '확정 대기로 전환되었습니다.')
+      queryClient.invalidateQueries({ queryKey: ['interview', id] })
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.message || '확정 대기 전환에 실패했습니다.')
+    },
+  })
+
   // 리마인더 발송 mutation
   const remindMutation = useMutation({
     mutationFn: async () => {
@@ -215,15 +230,41 @@ export function InterviewDetailPage() {
       key: 'interviewerName',
     },
     {
-      title: '날짜',
-      dataIndex: 'slot_date',
-      key: 'slot_date',
+      title: '선택한 제안 일정',
+      key: 'selectedProposedSlot',
+      render: (_, record) => {
+        const matched = (data?.proposedSlots || []).find((slot: any) =>
+          slot.date === record.slot_date &&
+          slot.startTime === record.start_time &&
+          slot.endTime === record.end_time
+        )
+        if (matched) return `${matched.date} ${matched.startTime} ~ ${matched.endTime}`
+        return `${record.slot_date} ${record.start_time} ~ ${record.end_time}`
+      },
     },
-    {
-      title: '시간',
-      key: 'time',
-      render: (_, record) => `${record.start_time} ~ ${record.end_time}`,
-    },
+  ]
+
+  const slotSelectionStats = ((data?.proposedSlots || []) as any[]).map((slot) => {
+    const selectedBy = (data?.timeSelections || []).filter((selection: any) =>
+      selection.slot_date === slot.date &&
+      selection.start_time === slot.startTime &&
+      selection.end_time === slot.endTime
+    )
+    const interviewerNames = selectedBy.map((selection: any) => selection.interviewerName).filter(Boolean)
+    return {
+      slotId: slot.slotId,
+      date: slot.date,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      count: selectedBy.length,
+      interviewerNames: interviewerNames.join(', ') || '-',
+    }
+  })
+
+  const slotSelectionStatsColumns: ColumnsType<any> = [
+    { title: '제안 일정', key: 'slot', render: (_, r) => `${r.date} ${r.startTime} ~ ${r.endTime}` },
+    { title: '선택 면접관 수', dataIndex: 'count', key: 'count' },
+    { title: '선택 면접관', dataIndex: 'interviewerNames', key: 'interviewerNames' },
   ]
 
   return (
@@ -247,6 +288,18 @@ export function InterviewDetailPage() {
                       loading={approveConfirmationMutation.isPending}
                     >
                       확정 승인
+                    </Button>
+                  )}
+                  {(data.interview.status === 'PENDING' || data.interview.status === 'PARTIAL') &&
+                    data.responseStatus?.length > 0 &&
+                    data.responseStatus.every((r: { responded?: boolean }) => r.responded) && (
+                    <Button
+                      type="default"
+                      icon={<CheckCircleOutlined />}
+                      onClick={() => moveToPendingApprovalMutation.mutate()}
+                      loading={moveToPendingApprovalMutation.isPending}
+                    >
+                      확정 대기로 전환
                     </Button>
                   )}
                   <Button
@@ -397,6 +450,17 @@ export function InterviewDetailPage() {
                   dataSource={data.timeSelections}
                   loading={isLoading}
                   rowKey="selection_id"
+                  pagination={false}
+                />
+              </Card>
+            )}
+
+            {data.proposedSlots && data.proposedSlots.length > 0 && (
+              <Card title="제안 일정별 선택 현황">
+                <Table
+                  columns={slotSelectionStatsColumns}
+                  dataSource={slotSelectionStats}
+                  rowKey="slotId"
                   pagination={false}
                 />
               </Card>

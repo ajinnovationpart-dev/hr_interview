@@ -85,6 +85,15 @@ export interface ConfirmedScheduleRow {
   confirmed_at: string;
 }
 
+export interface ProposedSlotRow {
+  slot_id: string;
+  interview_id: string;
+  slot_date: string;
+  start_time: string;
+  end_time: string;
+  created_at?: string;
+}
+
 // ========== Service ==========
 
 export class SharePointExcelService {
@@ -211,6 +220,39 @@ export class SharePointExcelService {
       now,
       now,
     ]);
+  }
+
+  async createProposedSlots(
+    interviewId: string,
+    slots: Omit<ProposedSlotRow, 'slot_id' | 'interview_id' | 'created_at'>[]
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      await this.appendRow('interview_proposed_slots', [
+        `PS_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
+        interviewId,
+        slot.slot_date,
+        slot.start_time,
+        slot.end_time,
+        now,
+      ]);
+    }
+  }
+
+  async getProposedSlots(interviewId: string): Promise<ProposedSlotRow[]> {
+    const rows = await this.readWorksheet('interview_proposed_slots');
+    if (rows.length <= 1) return [];
+    return rows.slice(1)
+      .filter((row) => row[1] === interviewId)
+      .map((row) => ({
+        slot_id: row[0] || '',
+        interview_id: row[1] || '',
+        slot_date: row[2] || '',
+        start_time: row[3] || '',
+        end_time: row[4] || '',
+        created_at: row[5] || '',
+      }));
   }
 
   async updateInterviewStatus(interviewId: string, status: InterviewRow['status']): Promise<void> {

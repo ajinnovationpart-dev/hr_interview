@@ -9,79 +9,14 @@ import { apiA } from '../../utils/apiA'
 
 const { Text, Title } = Typography
 
-const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({ label: `${i}시`, value: i }))
-const MINUTE_OPTIONS = [0, 30].map((m) => ({ label: `${m}분`, value: m }))
-
 function normalizeInterviewerId(id: unknown): string {
   return String(id ?? '').trim()
-}
-
-/** 분을 0 또는 30으로 맞춤 (이전 값/버그로 32분 등이 들어온 경우) */
-function normalizeMinute(m: number): number {
-  if (m === 0 || m === 30) return m
-  return m < 15 ? 0 : 30
-}
-
-/** 시/분만 쓰는 Dayjs 생성 (날짜는 당일 00:00 기준으로 통일) */
-function timeOnlyDayjs(hour: number, minute: number): Dayjs {
-  return dayjs().startOf('day').hour(hour).minute(minute).second(0).millisecond(0)
-}
-
-/** 시/분 Select (부모가 hour, minute state로 제어 — Form과 꼬이지 않도록) */
-function StartTimeSelect({
-  hour,
-  minute,
-  onChange,
-}: {
-  hour: number
-  minute: number
-  onChange: (hour: number, minute: number) => void
-}) {
-  const safeHour = hour >= 0 && hour <= 23 ? hour : 9
-  const safeMinute = minute === 0 || minute === 30 ? minute : 0
-  return (
-    <Space.Compact style={{ width: '100%' }}>
-      <Select
-        style={{ width: '50%' }}
-        placeholder="시"
-        value={safeHour}
-        options={HOUR_OPTIONS}
-        onChange={(h) => onChange(h, safeMinute)}
-      />
-      <Select
-        style={{ width: '50%' }}
-        placeholder="분"
-        value={safeMinute}
-        options={MINUTE_OPTIONS}
-        onChange={(m) => onChange(safeHour, m)}
-      />
-    </Space.Compact>
-  )
-}
-
-function EndTimeDisplay({ value }: { value?: dayjs.Dayjs }) {
-  return (
-    <Input
-      readOnly
-      style={{ width: '100%' }}
-      value={value && dayjs.isDayjs(value) ? value.format('HH:mm') : '--:--'}
-    />
-  )
 }
 
 export function InterviewCreatePage() {
   const navigate = useNavigate()
   const [form] = Form.useForm()
   const [resumeFiles, setResumeFiles] = React.useState<Record<number, UploadFile[]>>({})
-  const [startHour, setStartHour] = React.useState(9)
-  const [startMinute, setStartMinute] = React.useState(0)
-
-  // 시작 시간 변경 시 폼 반영
-  const handleStartTimeChange = (hour: number, minute: number) => {
-    setStartHour(hour)
-    setStartMinute(minute)
-    form.setFieldsValue({ proposedStartTime: timeOnlyDayjs(hour, minute) })
-  }
 
   const { data: interviewers } = useQuery({
     queryKey: ['interviewers'],
@@ -292,27 +227,20 @@ export function InterviewCreatePage() {
     },
   })
 
-  // 종료 시간 자동 계산 (시작 시간 분은 0/30으로 정규화해 사용)
-  const calculateEndTime = () => {
-    const candidates = form.getFieldValue('candidates') || []
-    const startTime = form.getFieldValue('proposedStartTime')
-    const interviewDuration = parseInt(config?.interview_duration_minutes || '30')
-    if (!startTime || !dayjs.isDayjs(startTime) || !startTime.isValid() || candidates.length === 0) return
-    const hour = startTime.hour()
-    const min = normalizeMinute(startTime.minute())
-    const startMinutes = hour * 60 + min
-    const endMinutes = startMinutes + (candidates.length * interviewDuration)
-    const endHour = Math.floor(endMinutes / 60)
-    const endMin = endMinutes % 60
-    form.setFieldsValue({
-      proposedEndTime: timeOnlyDayjs(endHour, endMin)
-    })
-  }
-
   const handleSubmit = (values: any) => {
-    const proposedDate = (values.proposedDate as Dayjs).format('YYYY-MM-DD')
-    // 시작 시간은 state 기준으로 전송 (Form과 꼬이지 않도록)
-    const proposedStartTime = `${String(startHour).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}`
+    const proposedSlots = (values.proposedSlots || []).map((slot: { date: Dayjs; startTime: Dayjs; endTime: Dayjs }) => ({
+      date: slot.date.format('YYYY-MM-DD'),
+      startTime: slot.startTime.format('HH:mm'),
+      endTime: slot.endTime.format('HH:mm'),
+    }))
+    if (proposedSlots.length < 1) {
+      message.error('최소 1개의 제안 일정을 입력해주세요')
+      return
+    }
+    if (proposedSlots.length > 5) {
+      message.error('제안 일정은 최대 5개까지 입력할 수 있습니다')
+      return
+    }
     
     // 각 면접자별로 interviewerIds가 있는지 확인
     const candidates = values.candidates.map((c: any) => ({
@@ -363,24 +291,10 @@ export function InterviewCreatePage() {
     mutation.mutate({
       mainNotice: values.mainNotice,
       teamName: values.teamName,
-      proposedDate,
-      proposedStartTime,
+      proposedSlots,
       candidates,
     })
   }
-
-  // 폼 값 변경 시 종료 시간만 재계산 (시작 시간은 사용자 선택 그대로 유지)
-  const handleValuesChange = (changed: any) => {
-    if ('proposedStartTime' in changed || 'candidates' in changed) {
-      calculateEndTime()
-    }
-  }
-
-  // 시작 시간(state)이 바뀌면 폼 반영 + 종료 시간 재계산
-  React.useEffect(() => {
-    form.setFieldsValue({ proposedStartTime: timeOnlyDayjs(startHour, startMinute) })
-    calculateEndTime()
-  }, [startHour, startMinute])
 
   return (
     <Card title="새 면접 등록">
@@ -388,8 +302,8 @@ export function InterviewCreatePage() {
         form={form}
         layout="vertical"
         onFinish={handleSubmit}
-        onValuesChange={handleValuesChange}
         initialValues={{
+          proposedSlots: [{ date: dayjs(), startTime: dayjs().hour(9).minute(0), endTime: dayjs().hour(10).minute(0) }],
           candidates: [{ name: '', email: '', phone: '', positionApplied: '', interviewerIds: [] }],
         }}
       >
@@ -412,35 +326,89 @@ export function InterviewCreatePage() {
 
         <Divider />
 
-        <Title level={4}>2. 면접 일시</Title>
-        <Form.Item
-          label="제안 날짜"
-          name="proposedDate"
-          rules={[{ required: true, message: '면접 날짜를 선택해주세요' }]}
-        >
-          <DatePicker style={{ width: '100%' }} />
-        </Form.Item>
-
-        <Space style={{ width: '100%' }} size="large">
-          <Form.Item label="시작 시간" required rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}>
-            <StartTimeSelect
-              hour={startHour}
-              minute={startMinute}
-              onChange={handleStartTimeChange}
-            />
-          </Form.Item>
-          <Form.Item name="proposedStartTime" initialValue={timeOnlyDayjs(9, 0)} noStyle>
-            <></>
-          </Form.Item>
-
-          <Form.Item label="종료 시간 (자동 계산)" name="proposedEndTime">
-            <EndTimeDisplay />
-          </Form.Item>
-        </Space>
-        
-        <Text type="secondary" style={{ fontSize: '12px' }}>
-          💡 면접자 수 × 30분으로 자동 계산됩니다
-        </Text>
+        <Title level={4}>2. 제안 일정</Title>
+        <Form.List name="proposedSlots">
+          {(fields, { add, remove }) => (
+            <>
+              {fields.map((field, index) => (
+                <Card
+                  key={`slot-${field.key}`}
+                  type="inner"
+                  title={`제안 일정 ${index + 1}`}
+                  extra={fields.length > 1 ? (
+                    <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(field.name)}>
+                      삭제
+                    </Button>
+                  ) : null}
+                  style={{ marginBottom: '12px' }}
+                >
+                  <Space style={{ width: '100%' }} size="middle" wrap>
+                    <Form.Item
+                      label="날짜"
+                      name={[field.name, 'date']}
+                      rules={[{ required: true, message: '날짜를 선택해주세요' }]}
+                    >
+                      <DatePicker style={{ width: 180 }} />
+                    </Form.Item>
+                    <Form.Item
+                      label="시작 시간"
+                      name={[field.name, 'startTime']}
+                      rules={[{ required: true, message: '시작 시간을 선택해주세요' }]}
+                    >
+                      <TimePicker
+                        format="HH:mm"
+                        minuteStep={30}
+                        showNow={false}
+                        changeOnScroll
+                        onChange={(time) => time && form.setFieldValue(['proposedSlots', field.name, 'startTime'], clampTimeToBusinessHours(time, config) ?? time)}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="종료 시간"
+                      name={[field.name, 'endTime']}
+                      rules={[
+                        { required: true, message: '종료 시간을 선택해주세요' },
+                        ({ getFieldValue }) => ({
+                          validator(_, value) {
+                            const start = getFieldValue(['proposedSlots', field.name, 'startTime'])
+                            if (!start || !value || !dayjs.isDayjs(start) || !dayjs.isDayjs(value)) return Promise.resolve()
+                            if (value.isAfter(start)) return Promise.resolve()
+                            return Promise.reject(new Error('종료 시간은 시작 시간보다 늦어야 합니다'))
+                          }
+                        })
+                      ]}
+                    >
+                      <TimePicker
+                        format="HH:mm"
+                        minuteStep={30}
+                        showNow={false}
+                        changeOnScroll
+                        onChange={(time) => time && form.setFieldValue(['proposedSlots', field.name, 'endTime'], clampTimeToBusinessHours(time, config) ?? time)}
+                      />
+                    </Form.Item>
+                  </Space>
+                </Card>
+              ))}
+              <Button
+                type="dashed"
+                block
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  if (fields.length >= 5) {
+                    message.warning('제안 일정은 최대 5개까지 추가할 수 있습니다')
+                    return
+                  }
+                  add({ date: dayjs(), startTime: dayjs().hour(9).minute(0), endTime: dayjs().hour(10).minute(0) })
+                }}
+              >
+                일정 추가
+              </Button>
+              <Text type="secondary" style={{ fontSize: '12px' }}>
+                최소 1개, 최대 5개의 제안 일정을 등록할 수 있습니다.
+              </Text>
+            </>
+          )}
+        </Form.List>
 
         <Divider />
 
