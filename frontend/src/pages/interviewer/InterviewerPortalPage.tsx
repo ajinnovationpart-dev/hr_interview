@@ -237,7 +237,7 @@ export function InterviewerPortalPage() {
         if (record.status === 'PENDING' || record.status === 'PARTIAL') {
           return (
             <Button
-              type="primary"
+              type="default"
               size="small"
               icon={<CheckCircleOutlined />}
               onClick={(e) => {
@@ -249,7 +249,7 @@ export function InterviewerPortalPage() {
             </Button>
           )
         }
-        if (record.status === 'CONFIRMED') {
+        if (record.status === 'CONFIRMED' && !record.myAcceptedAt) {
           return (
             <Button
               type="primary"
@@ -330,30 +330,25 @@ export function InterviewerPortalPage() {
                       : `${selectedInterview.proposed_date} ${selectedInterview.proposed_start_time} ~ ${selectedInterview.proposed_end_time}`)
                   : (
                     <Space direction="vertical" style={{ width: '100%' }}>
-                      {(selectedInterview.proposedSlots || []).map(slot => (
-                        <Card
+                      {(selectedInterview.proposedSlots ?? []).map(slot => (
+                        <div
                           key={slot.slotId}
-                          size="small"
-                          hoverable
                           onClick={() => setSelectedSlotId(slot.slotId)}
                           style={{
-                            cursor: 'pointer',
+                            padding: '8px 12px',
                             border: selectedSlotId === slot.slotId ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                            borderRadius: 6,
                             backgroundColor: selectedSlotId === slot.slotId ? '#e6f7ff' : 'white',
+                            cursor: 'pointer',
                           }}
                         >
                           <Space>
-                            <Radio checked={selectedSlotId === slot.slotId} readOnly />
+                            <Radio checked={selectedSlotId === slot.slotId} onChange={() => setSelectedSlotId(slot.slotId)} />
                             <Text strong>{slot.date}</Text>
                             <Text>{slot.startTime} ~ {slot.endTime}</Text>
                           </Space>
-                        </Card>
+                        </div>
                       ))}
-                      {(!selectedInterview.proposedSlots || selectedInterview.proposedSlots.length === 0) && (
-                        <Text type="secondary">
-                          {selectedInterview.proposed_date} {selectedInterview.proposed_start_time} ~ {selectedInterview.proposed_end_time}
-                        </Text>
-                      )}
                     </Space>
                   )
                 }
