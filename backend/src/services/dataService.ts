@@ -15,7 +15,7 @@ export interface ProposedSlotRow {
   slot_date: string;
   start_time: string;
   end_time: string;
-  created_at?: string;
+  sort_order: number;
 }
 
 // Google Sheets와 SharePoint Excel의 공통 인터페이스
@@ -24,8 +24,8 @@ export interface IDataService {
   getAllInterviews(): Promise<any[]>;
   getInterviewById(interviewId: string): Promise<any | null>;
   createInterview(interview: any): Promise<void>;
-  createProposedSlots(interviewId: string, slots: Omit<ProposedSlotRow, 'slot_id' | 'interview_id' | 'created_at'>[]): Promise<void>;
-  getProposedSlots(interviewId: string): Promise<ProposedSlotRow[]>;
+  createInterviewProposedSlots(slots: ProposedSlotRow[]): Promise<void>;
+  getInterviewProposedSlots(interviewId: string): Promise<ProposedSlotRow[]>;
   updateInterview(interviewId: string, updates: any): Promise<void>;
   updateInterviewStatus(interviewId: string, status: string): Promise<void>;
   deleteInterview(interviewId: string): Promise<void>;

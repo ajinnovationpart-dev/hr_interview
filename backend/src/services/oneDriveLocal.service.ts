@@ -367,7 +367,7 @@ export class OneDriveLocalService {
       },
       {
         name: 'interview_proposed_slots',
-        headers: ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'created_at']
+        headers: ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'sort_order', 'created_at']
       },
       {
         name: 'candidate_interviewers',
@@ -447,7 +447,7 @@ export class OneDriveLocalService {
           'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
           'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
-          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'sort_order', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
           'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
@@ -504,7 +504,7 @@ export class OneDriveLocalService {
           'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
           'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
-          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'created_at'],
+          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'sort_order', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
           'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
@@ -531,6 +531,7 @@ export class OneDriveLocalService {
           'interviews': ['interview_id', 'main_notice', 'team_name', 'proposed_date', 'proposed_start_time', 'proposed_end_time', 'status', 'created_by', 'created_at', 'updated_at', 'room_id', 'cancellation_reason', 'completed_at', 'interview_notes', 'no_show_type', 'no_show_reason'],
           'candidates': ['candidate_id', 'name', 'email', 'phone', 'position_applied', 'created_at', 'status', 'resume_url', 'notes'],
           'interview_candidates': ['interview_id', 'candidate_id', 'sequence', 'scheduled_start_time', 'scheduled_end_time', 'created_at'],
+          'interview_proposed_slots': ['slot_id', 'interview_id', 'slot_date', 'start_time', 'end_time', 'sort_order', 'created_at'],
           'candidate_interviewers': ['interview_id', 'candidate_id', 'interviewer_id', 'role', 'created_at'],
           'interviewers': ['interviewer_id', 'name', 'email', 'department', 'position', 'is_team_lead', 'phone', 'is_active', 'password_hash', 'created_at'],
           'interview_interviewers': ['interview_id', 'interviewer_id', 'responded_at', 'reminder_sent_count', 'last_reminder_sent_at', 'accepted_at'],
@@ -661,30 +662,30 @@ export class OneDriveLocalService {
     ]);
   }
 
-  async createProposedSlots(
-    interviewId: string,
-    slots: Array<{ slot_date: string; start_time: string; end_time: string }>
+  async createInterviewProposedSlots(
+    slots: Array<{ slot_id: string; interview_id: string; slot_date: string; start_time: string; end_time: string; sort_order: number }>
   ): Promise<void> {
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       await this.appendRow('interview_proposed_slots', [
-        `PS_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
-        interviewId,
+        slot.slot_id,
+        slot.interview_id,
         slot.slot_date,
         slot.start_time,
         slot.end_time,
+        slot.sort_order,
         new Date().toISOString(),
       ]);
     }
   }
 
-  async getProposedSlots(interviewId: string): Promise<Array<{
+  async getInterviewProposedSlots(interviewId: string): Promise<Array<{
     slot_id: string;
     interview_id: string;
     slot_date: string;
     start_time: string;
     end_time: string;
-    created_at: string;
+    sort_order: number;
   }>> {
     const rows = await this.readWorksheet('interview_proposed_slots');
     if (rows.length < 2) return [];
@@ -697,8 +698,9 @@ export class OneDriveLocalService {
         slot_date: row[2] || '',
         start_time: row[3] || '',
         end_time: row[4] || '',
-        created_at: row[5] || '',
-      }));
+        sort_order: Number.isFinite(Number(row[5])) ? Number(row[5]) : 0,
+      }))
+      .sort((a, b) => a.sort_order - b.sort_order);
   }
 
   async updateInterview(interviewId: string, updates: any): Promise<void> {

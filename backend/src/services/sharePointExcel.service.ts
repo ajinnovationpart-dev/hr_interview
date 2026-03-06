@@ -91,7 +91,7 @@ export interface ProposedSlotRow {
   slot_date: string;
   start_time: string;
   end_time: string;
-  created_at?: string;
+  sort_order: number;
 }
 
 // ========== Service ==========
@@ -222,25 +222,23 @@ export class SharePointExcelService {
     ]);
   }
 
-  async createProposedSlots(
-    interviewId: string,
-    slots: Omit<ProposedSlotRow, 'slot_id' | 'interview_id' | 'created_at'>[]
-  ): Promise<void> {
+  async createInterviewProposedSlots(slots: ProposedSlotRow[]): Promise<void> {
     const now = new Date().toISOString();
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       await this.appendRow('interview_proposed_slots', [
-        `PS_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
-        interviewId,
+        slot.slot_id,
+        slot.interview_id,
         slot.slot_date,
         slot.start_time,
         slot.end_time,
+        slot.sort_order,
         now,
       ]);
     }
   }
 
-  async getProposedSlots(interviewId: string): Promise<ProposedSlotRow[]> {
+  async getInterviewProposedSlots(interviewId: string): Promise<ProposedSlotRow[]> {
     const rows = await this.readWorksheet('interview_proposed_slots');
     if (rows.length <= 1) return [];
     return rows.slice(1)
@@ -251,8 +249,9 @@ export class SharePointExcelService {
         slot_date: row[2] || '',
         start_time: row[3] || '',
         end_time: row[4] || '',
-        created_at: row[5] || '',
-      }));
+        sort_order: Number.isFinite(Number(row[5])) ? Number(row[5]) : 0,
+      }))
+      .sort((a, b) => a.sort_order - b.sort_order);
   }
 
   async updateInterviewStatus(interviewId: string, status: InterviewRow['status']): Promise<void> {

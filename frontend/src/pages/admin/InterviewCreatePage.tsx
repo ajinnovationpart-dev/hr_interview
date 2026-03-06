@@ -1,6 +1,6 @@
 import React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload } from 'antd'
+import { Form, Input, DatePicker, TimePicker, Button, Card, Space, message, Divider, Typography, Select, Tag, Upload, Modal } from 'antd'
 import { PlusOutlined, MinusCircleOutlined, UploadOutlined } from '@ant-design/icons'
 import type { SelectProps, UploadFile } from 'antd'
 import { useNavigate } from 'react-router-dom'
@@ -162,6 +162,7 @@ export function InterviewCreatePage() {
       // 면접 생성 후 이력서 업로드
       const candidates = form.getFieldValue('candidates') || []
       const interviewData = data.data
+      const failedUploads: string[] = []
       
       // 각 면접자에 대해 이력서 업로드
       const uploadPromises = candidates.map(async (candidate: any, index: number) => {
@@ -173,6 +174,8 @@ export function InterviewCreatePage() {
                            interviewData.candidateSchedules?.[index]?.candidateId
         if (!candidateId) {
           console.warn(`Candidate ID not found for candidate at index ${index}`)
+          failedUploads.push(candidate.name || `면접자 ${index + 1}`)
+          message.warning(`${candidate.name || `면접자 ${index + 1}`}의 candidateId를 찾지 못해 이력서 업로드를 건너뜁니다`)
           return
         }
         
@@ -188,6 +191,7 @@ export function InterviewCreatePage() {
           } catch (error: any) {
             const serverMessage = error.response?.data?.message
             console.error(`이력서 업로드 실패 (${candidate.name}):`, error, serverMessage ? { serverMessage } : '')
+            failedUploads.push(candidate.name || `면접자 ${index + 1}`)
             message.warning(serverMessage || `${candidate.name}님의 이력서 업로드에 실패했습니다`)
           }
         }
@@ -221,12 +225,39 @@ export function InterviewCreatePage() {
           message.warning(`메일 미발송/실패 상세: ${short.join(' / ')}${more}`, 10)
         }
       }
+      if (failedUploads.length > 0) {
+        message.error(`이력서 업로드 실패: ${Array.from(new Set(failedUploads)).join(', ')}`)
+        const shouldNavigate = await new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title: '일부 이력서 업로드 실패',
+            content: '업로드에 실패한 이력서가 있습니다. 그래도 목록 화면으로 이동하시겠습니까?',
+            okText: '이동',
+            cancelText: '현재 화면 유지',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+        if (!shouldNavigate) return
+      }
+
       navigate('/admin/dashboard')
     },
     onError: (error: any) => {
       message.error(error.response?.data?.message || '면접 등록에 실패했습니다')
     },
   })
+
+  const warnIfLargeClampDiff = (original: Dayjs, adjusted: Dayjs, source: 'startTime' | 'endTime') => {
+    const diffMinutes = Math.abs(adjusted.diff(original, 'minute'))
+    if (diffMinutes >= 60) {
+      console.warn('[businessHours clamp warning]', {
+        source,
+        original: original.format('HH:mm'),
+        adjusted: adjusted.format('HH:mm'),
+        diffMinutes,
+      })
+    }
+  }
 
   const handleSubmit = (values: any) => {
     const proposedSlots = (values.proposedSlots || []).map((slot: { date: Dayjs; startTime: Dayjs; endTime: Dayjs }) => ({
@@ -361,7 +392,12 @@ export function InterviewCreatePage() {
                         minuteStep={30}
                         showNow={false}
                         changeOnScroll
-                        onChange={(time: Dayjs | null) => time && form.setFieldValue(['proposedSlots', field.name, 'startTime'], clampTimeToBusinessHours(time, config) ?? time)}
+                        onChange={(time: Dayjs | null) => {
+                          if (!time) return
+                          const adjusted = clampTimeToBusinessHours(time, config) ?? time
+                          warnIfLargeClampDiff(time, adjusted, 'startTime')
+                          form.setFieldValue(['proposedSlots', field.name, 'startTime'], adjusted)
+                        }}
                       />
                     </Form.Item>
                     <Form.Item
@@ -384,7 +420,12 @@ export function InterviewCreatePage() {
                         minuteStep={30}
                         showNow={false}
                         changeOnScroll
-                        onChange={(time: Dayjs | null) => time && form.setFieldValue(['proposedSlots', field.name, 'endTime'], clampTimeToBusinessHours(time, config) ?? time)}
+                        onChange={(time: Dayjs | null) => {
+                          if (!time) return
+                          const adjusted = clampTimeToBusinessHours(time, config) ?? time
+                          warnIfLargeClampDiff(time, adjusted, 'endTime')
+                          form.setFieldValue(['proposedSlots', field.name, 'endTime'], adjusted)
+                        }}
                       />
                     </Form.Item>
                   </Space>

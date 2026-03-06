@@ -47,6 +47,23 @@ export function InterviewDetailPage() {
   const [completeForm] = Form.useForm()
   const [noShowForm] = Form.useForm()
 
+  const getDefaultDurationMinutes = () => {
+    const fromConfig = Number(config?.interview_duration_minutes)
+    if (Number.isFinite(fromConfig) && fromConfig > 0) return fromConfig
+
+    const start = data?.interview?.proposed_start_time
+    const end = data?.interview?.proposed_end_time
+    if (typeof start === 'string' && typeof end === 'string' && start.includes(':') && end.includes(':')) {
+      const [sh, sm] = start.split(':').map((v) => Number(v))
+      const [eh, em] = end.split(':').map((v) => Number(v))
+      if ([sh, sm, eh, em].every((v) => Number.isFinite(v))) {
+        const duration = (eh * 60 + em) - (sh * 60 + sm)
+        if (duration > 0) return duration
+      }
+    }
+    return 60
+  }
+
   const { data, isLoading } = useQuery({
     queryKey: ['interview', id],
     queryFn: async () => {
@@ -431,20 +448,7 @@ export function InterviewDetailPage() {
             )}
 
             {data.timeSelections && data.timeSelections.length > 0 && (
-              <Card 
-                title="선택된 시간대"
-                extra={
-                  <Button
-                    type="primary"
-                    icon={<ThunderboltOutlined />}
-                    loading={analyzeMutation.isPending}
-                    onClick={() => analyzeMutation.mutate()}
-                    disabled={data.interview.status === 'CONFIRMED'}
-                  >
-                    AI 분석으로 공통 시간대 찾기
-                  </Button>
-                }
-              >
+              <Card title="선택된 시간대">
                 <Table
                   columns={timeSelectionColumns}
                   dataSource={data.timeSelections}
@@ -532,7 +536,7 @@ export function InterviewDetailPage() {
                           editForm.setFieldsValue({
                             interviewDate: data.interview.proposed_date ? dayjs(data.interview.proposed_date) : null,
                             startTime,
-                            duration: 60,
+                            duration: getDefaultDurationMinutes(),
                           })
                           setIsEditModalOpen(true)
                         }}
@@ -561,7 +565,14 @@ export function InterviewDetailPage() {
                     <Button
                       danger
                       icon={<CloseCircleOutlined />}
-                      onClick={() => setIsNoShowModalOpen(true)}
+                      onClick={() => {
+                        const firstInterviewerId = data.responseStatus?.[0]?.interviewerId
+                        noShowForm.setFieldsValue({
+                          noShowType: 'candidate',
+                          interviewerId: firstInterviewerId,
+                        })
+                        setIsNoShowModalOpen(true)
+                      }}
                     >
                       노쇼 처리
                     </Button>
@@ -744,7 +755,10 @@ export function InterviewDetailPage() {
             await apiA.post(`/interviews/${id}/no-show`, {
               noShowType: values.noShowType,
               reason: values.reason,
-              interviewerId: values.interviewerId,
+              interviewerId:
+                values.noShowType === 'interviewer' || values.noShowType === 'both'
+                  ? values.interviewerId
+                  : undefined,
             })
             message.success('노쇼 처리되었습니다')
             queryClient.invalidateQueries({ queryKey: ['interview', id] })
@@ -775,6 +789,30 @@ export function InterviewDetailPage() {
               <Select.Option value="interviewer">면접관 노쇼</Select.Option>
               <Select.Option value="both">양쪽 모두 노쇼</Select.Option>
             </Select>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, next) => prev.noShowType !== next.noShowType}
+          >
+            {({ getFieldValue }) => {
+              const noShowType = getFieldValue('noShowType')
+              if (noShowType !== 'interviewer' && noShowType !== 'both') return null
+              return (
+                <Form.Item
+                  label="노쇼 면접관"
+                  name="interviewerId"
+                  rules={[{ required: true, message: '노쇼 면접관을 선택해주세요' }]}
+                >
+                  <Select placeholder="면접관을 선택해주세요">
+                    {(data?.responseStatus || []).map((r: { interviewerId: string; name: string }) => (
+                      <Select.Option key={r.interviewerId} value={r.interviewerId}>
+                        {r.name}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )
+            }}
           </Form.Item>
           <Form.Item
             label="사유"

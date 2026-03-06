@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { Alert, Card, Button, Space, message, Descriptions, Tag, Spin, Checkbox, Typography } from 'antd'
@@ -9,6 +9,7 @@ interface ProposedSlot {
   date: string
   startTime: string
   endTime: string
+  sortOrder?: number
 }
 
 const { Text } = Typography
@@ -25,6 +26,16 @@ export function ConfirmPage() {
       return response.data.data
     },
   })
+
+  const proposedSlots = ((data?.proposedSlots || []) as ProposedSlot[])
+
+  useEffect(() => {
+    if (!data) return
+    if (data.status === 'CONFIRMED' || data.status === 'PENDING_APPROVAL') return
+    if (proposedSlots.length === 0) return
+    if (selectedSlotIds.length > 0) return
+    setSelectedSlotIds([proposedSlots[0].slotId])
+  }, [data, proposedSlots, selectedSlotIds.length])
 
   const mutation = useMutation({
     mutationFn: async (slotIds: string[]) => {
@@ -83,8 +94,12 @@ export function ConfirmPage() {
             <Descriptions.Item label="면접자">
               {data.candidates.join(', ')}
             </Descriptions.Item>
-            <Descriptions.Item label="제안 일시">
-              {data.proposedSlot.date} {data.proposedSlot.startTime} ~ {data.proposedSlot.endTime}
+            <Descriptions.Item label="제안 일정">
+              {proposedSlots.map((slot) => (
+                <div key={slot.slotId}>
+                  {slot.date} {slot.startTime} ~ {slot.endTime}
+                </div>
+              ))}
             </Descriptions.Item>
             <Descriptions.Item label="응답 현황">
               <Tag color="blue">
@@ -144,7 +159,7 @@ export function ConfirmPage() {
                 style={{ marginBottom: 16 }}
               />
             )}
-            {((data.proposedSlots || []) as ProposedSlot[]).length === 0 ? (
+            {proposedSlots.length === 0 ? (
               <Alert type="warning" showIcon message="선택 가능한 제안 일정이 없습니다. 관리자에게 문의해 주세요." />
             ) : (
               <Checkbox.Group
@@ -154,7 +169,7 @@ export function ConfirmPage() {
                 disabled={data.externalScheduleExists}
               >
                 <Space direction="vertical" style={{ width: '100%' }}>
-                  {((data.proposedSlots || []) as ProposedSlot[]).map((slot) => (
+                  {proposedSlots.map((slot) => (
                     <Card key={slot.slotId} size="small" style={{ width: '100%' }}>
                       <Checkbox value={slot.slotId}>
                         <Text strong>{slot.date}</Text>

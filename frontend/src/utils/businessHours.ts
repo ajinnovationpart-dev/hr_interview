@@ -15,8 +15,14 @@ const DEFAULT = {
 }
 
 function parseTimeToMinutes(timeStr: string): number {
-  const [h, m] = (timeStr || '').trim().split(':').map(Number)
-  return (h || 0) * 60 + (m || 0)
+  if (!timeStr || typeof timeStr !== 'string') return 0
+  const parts = timeStr.trim().split(':')
+  if (parts.length < 2) return 0
+  const h = parseInt(parts[0], 10)
+  const m = parseInt(parts[1], 10)
+  if (isNaN(h) || isNaN(m)) return 0
+  if (h < 0 || h > 23 || m < 0 || m > 59) return 0
+  return h * 60 + m
 }
 
 function parseConfig(config?: BusinessHoursConfig | null) {
@@ -101,23 +107,14 @@ export function getDefaultSlotMinutes(config?: BusinessHoursConfig | null): { st
 }
 
 /**
- * 주어진 시간(분)이 업무시간(점심 제외) 내인지
- */
-function isWithinBusinessHours(totalMinutes: number, config?: BusinessHoursConfig | null): boolean {
-  const { workStart, workEnd, lunchStart, lunchEnd } = parseConfig(config)
-  if (totalMinutes < workStart || totalMinutes >= workEnd) return false
-  if (totalMinutes >= lunchStart && totalMinutes < lunchEnd) return false
-  return true
-}
-
-/**
  * 시간(분)을 업무시간 구간으로 클램프. 업무 밖이면 가장 가까운 허용 시각(분) 반환.
  */
 function clampMinutesToBusinessHours(totalMinutes: number, config?: BusinessHoursConfig | null): number {
   const { workStart, workEnd, lunchStart, lunchEnd } = parseConfig(config)
+  if (workStart >= workEnd) return totalMinutes
   if (totalMinutes < workStart) return workStart
   if (totalMinutes >= lunchStart && totalMinutes < lunchEnd) return lunchEnd
-  if (totalMinutes >= workEnd) return workEnd - 30
+  if (totalMinutes >= workEnd) return Math.max(workEnd - 30, workStart)
   return totalMinutes
 }
 
@@ -129,8 +126,10 @@ export function clampTimeToBusinessHours(
   config?: BusinessHoursConfig | null
 ): Dayjs | null {
   if (!time || !time.isValid()) return null
+  const { workStart, workEnd } = parseConfig(config)
+  if (workStart >= workEnd) return time
   const totalMinutes = time.hour() * 60 + time.minute()
-  if (isWithinBusinessHours(totalMinutes, config)) return time
   const clamped = clampMinutesToBusinessHours(totalMinutes, config)
+  if (clamped === totalMinutes) return time
   return time.hour(Math.floor(clamped / 60)).minute(clamped % 60).second(0).millisecond(0)
 }

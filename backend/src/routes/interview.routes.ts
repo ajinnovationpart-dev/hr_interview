@@ -322,7 +322,7 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
 
     // 시간 선택 조회
     const timeSelections = await dataService.getTimeSelectionsByInterview(interviewId);
-    const proposedSlotsRaw = await dataService.getProposedSlots(interviewId);
+    const proposedSlotsRaw = await dataService.getInterviewProposedSlots(interviewId);
     const timeSelectionsWithNames = timeSelections.map(selection => {
       const interviewer = interviewerMap.get(selection.interviewer_id);
       return {
@@ -331,11 +331,15 @@ interviewRouter.get('/:id', adminAuth, async (req: Request, res: Response) => {
       };
     });
     const proposedSlots = proposedSlotsRaw.length > 0
-      ? proposedSlotsRaw.map((slot) => ({
+      ? proposedSlotsRaw
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((slot) => ({
         slotId: slot.slot_id,
         date: slot.slot_date,
         startTime: slot.start_time,
         endTime: slot.end_time,
+        sortOrder: slot.sort_order,
       }))
       : [{
         slotId: 'LEGACY_SLOT_1',
@@ -930,12 +934,14 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     });
 
     // 신규 제안 슬롯 저장
-    await dataService.createProposedSlots(
-      interviewId,
-      validated.proposedSlots.map((slot) => ({
+    await dataService.createInterviewProposedSlots(
+      validated.proposedSlots.map((slot, index) => ({
+        slot_id: `PS_${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`,
+        interview_id: interviewId,
         slot_date: slot.date,
         start_time: slot.startTime,
         end_time: slot.endTime,
+        sort_order: index + 1,
       }))
     );
 
@@ -1118,19 +1124,6 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
       }
     });
 
-    // 메일 템플릿 서비스 초기화
-    const templateService = new EmailTemplateService({
-      company_logo_url: config.company_logo_url,
-      company_address: config.company_address,
-      parking_info: config.parking_info,
-      dress_code: config.dress_code || '비즈니스 캐주얼',
-      email_greeting: config.email_greeting,
-      email_company_name: config.email_company_name,
-      email_department_name: config.email_department_name,
-      email_contact_email: config.email_contact_email,
-      email_footer_text: config.email_footer_text,
-    });
-
     // 면접관별로 이메일 발송 (담당 면접자 정보 포함)
     let emailsSent = 0;
     const emailResults: Array<{
@@ -1160,6 +1153,14 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
     if (!emailService.isConfigured()) {
       logger.error('❌ SMTP not configured. Skipping all email sends. Set SMTP_USER and SMTP_PASSWORD in .env');
     }
+    const proposedSlotsForEmail = validated.proposedSlots.map((slot, index) => ({
+      slot_id: `EMAIL_SLOT_${interviewId}_${index + 1}`,
+      interview_id: interviewId,
+      slot_date: slot.date,
+      start_time: slot.startTime,
+      end_time: slot.endTime,
+      sort_order: index + 1,
+    }));
 
     for (const interviewerId of allInterviewerIds) {
       const idTrimmed = String(interviewerId).trim();
@@ -1243,23 +1244,6 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           interviewId,
         });
 
-        const confirmPath = `/confirm/${token}`;
-        const confirmLink = buildFrontendUrl(confirmPath);
-        const loginLink = buildInterviewerLoginLink(confirmPath);
-
-        // 메일 템플릿 생성
-        const emailContent = templateService.generateInterviewerInvitation({
-          interviewerName: interviewer.name,
-          mainNotice: validated.mainNotice,
-          teamName: validated.teamName,
-          candidates: assignedCandidates,
-          proposedDate: validated.proposedSlots
-            .map((slot) => `${dayjs(slot.date).format('YYYY년 MM월 DD일 (ddd)')} ${slot.startTime} ~ ${slot.endTime}`)
-            .join('<br/>'),
-          confirmLink,
-          loginLink,
-        });
-
         // 이메일 발송
         try {
           // 이메일 주소 정규화 및 검증
@@ -1296,11 +1280,16 @@ interviewRouter.post('/', adminAuth, async (req: Request, res: Response) => {
           logger.info(`   - Call timestamp: ${new Date().toISOString()}`);
           logger.info(`   - This is call #${emailsSent + 1} of ${allInterviewerIds.length} total calls`);
           
-          await emailService.sendEmail({
-            to: [emailToSend],
-            subject: `[면접 일정 조율] ${validated.mainNotice} - ${validated.teamName}`,
-            htmlBody: emailContent,
-          });
+          await emailService.sendInterviewInvitation(
+            emailToSend,
+            interviewer.name,
+            interviewId,
+            validated.mainNotice,
+            validated.teamName,
+            proposedSlotsForEmail,
+            assignedCandidates.map((c) => c.name),
+            token
+          );
           
           // 개별 SMTP API 호출 완료 로깅
           logger.info(`✅ [INDIVIDUAL SMTP CALL COMPLETE] Finished SMTP API call for ${interviewer.name} (${emailToSend})`);

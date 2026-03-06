@@ -94,7 +94,7 @@ export interface ProposedSlotRow {
   slot_date: string;
   start_time: string;
   end_time: string;
-  created_at?: string;
+  sort_order: number;
 }
 
 // ========== Service ==========
@@ -164,29 +164,31 @@ export class GoogleSheetsService {
     if (!result.success) throw new Error(result.message);
   }
 
-  async createProposedSlots(
-    interviewId: string,
-    slots: Omit<ProposedSlotRow, 'slot_id' | 'interview_id' | 'created_at'>[]
-  ): Promise<void> {
-    const payload = slots.map((s, i) => ({
-      slot_id: `PS_${Date.now()}_${i}`,
-      interview_id: interviewId,
+  async createInterviewProposedSlots(slots: ProposedSlotRow[]): Promise<void> {
+    const payload = slots.map((s) => ({
+      slot_id: s.slot_id,
+      interview_id: s.interview_id,
       slot_date: s.slot_date,
       start_time: s.start_time,
       end_time: s.end_time,
+      sort_order: s.sort_order,
     }));
+    const interviewId = slots[0]?.interview_id || '';
     const result = await this.callAPI('createProposedSlots', { interviewId, data: payload }, 'POST');
     if (!result.success) {
       logger.warn('createProposedSlots not supported in Google Sheets backend, falling back to legacy proposed_* fields only');
     }
   }
 
-  async getProposedSlots(interviewId: string): Promise<ProposedSlotRow[]> {
+  async getInterviewProposedSlots(interviewId: string): Promise<ProposedSlotRow[]> {
     const result = await this.callAPI('getProposedSlots', { interviewId });
     if (!result.success) {
       return [];
     }
-    return result.data || [];
+    return (result.data || []).sort(
+      (a: ProposedSlotRow, b: ProposedSlotRow) =>
+        a.sort_order - b.sort_order
+    );
   }
 
   async updateInterviewStatus(interviewId: string, status: InterviewRow['status']): Promise<void> {
