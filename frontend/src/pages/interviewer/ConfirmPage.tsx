@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
-import { Alert, Card, Button, Space, message, Descriptions, Tag, Spin, Checkbox, Typography } from 'antd'
+import { Alert, Card, Button, Space, message, Descriptions, Tag, Spin, Radio, Typography } from 'antd'
 import { apiA } from '../../utils/apiA'
 
 interface ProposedSlot {
@@ -17,7 +17,7 @@ const { Text } = Typography
 export function ConfirmPage() {
   const { token } = useParams<{ token: string }>()
   const queryClient = useQueryClient()
-  const [selectedSlotIds, setSelectedSlotIds] = useState<string[]>([])
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['confirm', token],
@@ -27,19 +27,21 @@ export function ConfirmPage() {
     },
   })
 
-  const proposedSlots = ((data?.proposedSlots || []) as ProposedSlot[])
+  const proposedSlots: ProposedSlot[] =
+    ((data?.proposedSlots as ProposedSlot[] | undefined) ??
+      (data?.proposedSlot ? [{ slotId: 'default', ...data.proposedSlot } as ProposedSlot] : []))
 
   useEffect(() => {
     if (!data) return
     if (data.status === 'CONFIRMED' || data.status === 'PENDING_APPROVAL') return
     if (proposedSlots.length === 0) return
-    if (selectedSlotIds.length > 0) return
-    setSelectedSlotIds([proposedSlots[0].slotId])
-  }, [data, proposedSlots, selectedSlotIds.length])
+    if (selectedSlotId) return
+    setSelectedSlotId(proposedSlots[0].slotId)
+  }, [data, proposedSlots, selectedSlotId])
 
   const mutation = useMutation({
-    mutationFn: async (slotIds: string[]) => {
-      const response = await apiA.post(`/confirm/${token}`, { selectedSlotIds: slotIds })
+    mutationFn: async (selectedSlots: Array<{ date: string; startTime: string; endTime: string }>) => {
+      const response = await apiA.post(`/confirm/${token}`, { selectedSlots })
       return response.data
     },
     onSuccess: (data) => {
@@ -65,11 +67,16 @@ export function ConfirmPage() {
   })
 
   const handleSubmit = () => {
-    if (selectedSlotIds.length === 0) {
-      message.warning('최소 1개의 제안 일정을 선택해주세요')
+    if (!selectedSlotId) {
+      message.warning('일정을 선택해주세요')
       return
     }
-    mutation.mutate(selectedSlotIds)
+    const selectedSlot = proposedSlots.find((slot) => slot.slotId === selectedSlotId)
+    if (!selectedSlot) {
+      message.warning('선택한 일정을 찾을 수 없습니다')
+      return
+    }
+    mutation.mutate([{ date: selectedSlot.date, startTime: selectedSlot.startTime, endTime: selectedSlot.endTime }])
   }
 
   if (isLoading) {
@@ -162,23 +169,38 @@ export function ConfirmPage() {
             {proposedSlots.length === 0 ? (
               <Alert type="warning" showIcon message="선택 가능한 제안 일정이 없습니다. 관리자에게 문의해 주세요." />
             ) : (
-              <Checkbox.Group
-                style={{ width: '100%' }}
-                value={selectedSlotIds}
-                onChange={(values) => setSelectedSlotIds(values as string[])}
-                disabled={data.externalScheduleExists}
-              >
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  {proposedSlots.map((slot) => (
-                    <Card key={slot.slotId} size="small" style={{ width: '100%' }}>
-                      <Checkbox value={slot.slotId}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {proposedSlots.map((slot) => {
+                  const selected = selectedSlotId === slot.slotId
+                  return (
+                    <Card
+                      key={slot.slotId}
+                      size="small"
+                      style={{
+                        width: '100%',
+                        border: selected ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                        backgroundColor: selected ? '#e6f7ff' : 'white',
+                        cursor: data.externalScheduleExists ? 'not-allowed' : 'pointer',
+                        opacity: data.externalScheduleExists ? 0.6 : 1,
+                      }}
+                      onClick={() => {
+                        if (data.externalScheduleExists) return
+                        setSelectedSlotId(slot.slotId)
+                      }}
+                    >
+                      <Space>
+                        <Radio
+                          checked={selected}
+                          disabled={data.externalScheduleExists}
+                          onChange={() => setSelectedSlotId(slot.slotId)}
+                        />
                         <Text strong>{slot.date}</Text>
-                        <Text style={{ marginLeft: 8 }}>{slot.startTime} ~ {slot.endTime}</Text>
-                      </Checkbox>
+                        <Text>{slot.startTime} ~ {slot.endTime}</Text>
+                      </Space>
                     </Card>
-                  ))}
-                </Space>
-              </Checkbox.Group>
+                  )
+                })}
+              </Space>
             )}
 
             <Button
@@ -195,7 +217,7 @@ export function ConfirmPage() {
                 marginTop: '16px'
               }}
             >
-              일정 제출
+              선택한 일정으로 제출
             </Button>
           </Space>
         </Card>
