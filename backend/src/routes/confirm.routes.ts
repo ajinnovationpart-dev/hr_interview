@@ -13,7 +13,17 @@ export const confirmRouter = Router();
 
 // 일정 선택 스키마
 const selectSlotsSchema = z.object({
-  selectedSlotIds: z.array(z.string().min(1)).min(1, '최소 1개의 제안 일정을 선택해주세요'),
+  selectedSlotIds: z.array(z.string().min(1)).min(1, '최소 1개의 제안 일정을 선택해주세요').optional(),
+  selectedSlots: z.array(z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  })).min(1, '최소 1개의 일정을 선택해주세요').optional(),
+}).refine((data) => {
+  return (Array.isArray(data.selectedSlotIds) && data.selectedSlotIds.length > 0) ||
+    (Array.isArray(data.selectedSlots) && data.selectedSlots.length > 0);
+}, {
+  message: 'selectedSlotIds 또는 selectedSlots 중 하나는 필수입니다',
 });
 
 // getInterviewById는 start_datetime/end_datetime/candidates를 반환하지 않음 → 제안일시·후보명 보강
@@ -21,23 +31,37 @@ async function getProposedSlotsAndCandidates(
   interviewId: string,
   interview: { proposed_date?: string; proposed_start_time?: string; proposed_end_time?: string }
 ) {
-  const rawSlots = await dataService.getInterviewProposedSlots(interviewId);
-  const proposedSlots = rawSlots.length > 0
-    ? rawSlots
-      .slice()
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((slot) => ({
-      slotId: slot.slot_id,
-      date: slot.slot_date,
-      startTime: slot.start_time,
-      endTime: slot.end_time,
-    }))
-    : [{
-      slotId: 'LEGACY_SLOT_1',
-      date: dayjs(interview.proposed_date || dayjs().format('YYYY-MM-DD')).format('YYYY-MM-DD'),
-      startTime: (interview.proposed_start_time || '09:00').slice(0, 5),
-      endTime: (interview.proposed_end_time || '18:00').slice(0, 5),
-    }];
+  const legacyWrappedSlot = {
+    slotId: 'LEGACY_SLOT_1',
+    date: dayjs(interview.proposed_date || dayjs().format('YYYY-MM-DD')).format('YYYY-MM-DD'),
+    startTime: (interview.proposed_start_time || '09:00').slice(0, 5),
+    endTime: (interview.proposed_end_time || '18:00').slice(0, 5),
+  };
+
+  let proposedSlots: Array<{ slotId: string; date: string; startTime: string; endTime: string }> = [];
+  const hasMethod = typeof (dataService as any).getInterviewProposedSlots === 'function';
+  if (hasMethod) {
+    try {
+      const rawSlots = await (dataService as any).getInterviewProposedSlots(interviewId);
+      if (Array.isArray(rawSlots) && rawSlots.length > 0) {
+        proposedSlots = rawSlots
+          .slice()
+          .sort((a: { sort_order?: number }, b: { sort_order?: number }) => (a.sort_order || 0) - (b.sort_order || 0))
+          .map((slot: { slot_id: string; slot_date: string; start_time: string; end_time: string }) => ({
+            slotId: slot.slot_id,
+            date: slot.slot_date,
+            startTime: slot.start_time,
+            endTime: slot.end_time,
+          }));
+      }
+    } catch {
+      // 메서드 실패 시 하위호환 fallback 사용
+    }
+  }
+  if (proposedSlots.length === 0) {
+    proposedSlots = [legacyWrappedSlot];
+  }
+
   let candidateNames: string[] = [];
   try {
     const candidates = await dataService.getCandidatesByInterview(interviewId);
@@ -128,6 +152,11 @@ confirmRouter.get('/:token', verifyToken, async (req: Request, res: Response) =>
         status: interview.status,
         candidates: candidateNames,
         proposedSlots,
+        proposedSlot: {
+          date: proposedSlots[0]?.date || '',
+          startTime: proposedSlots[0]?.startTime || '',
+          endTime: proposedSlots[0]?.endTime || '',
+        },
         responseStatus,
         externalScheduleExists,
         confirmedSchedule,
@@ -215,10 +244,31 @@ confirmRouter.post('/:token', verifyToken, async (req: Request, res: Response) =
         endTime: interview.proposed_end_time || '',
       }];
 
-    const slotMap = new Map(proposedSlotsWithFallback.map((slot) => [slot.slotId, slot]));
-    const selectedSlots = validated.selectedSlotIds.map((slotId) => slotMap.get(slotId)).filter(Boolean);
-    if (selectedSlots.length !== validated.selectedSlotIds.length) {
-      throw new AppError(400, '선택한 일정 중 유효하지 않은 슬롯이 포함되어 있습니다');
+    let selectedSlots: Array<{ date: string; startTime: string; endTime: string }> = [];
+    if (validated.selectedSlotIds && validated.selectedSlotIds.length > 0) {
+      const slotMap = new Map(proposedSlotsWithFallback.map((slot) => [slot.slotId, slot]));
+      selectedSlots = validated.selectedSlotIds.map((slotId) => slotMap.get(slotId)).filter(Boolean) as Array<{
+        date: string;
+        startTime: string;
+        endTime: string;
+      }>;
+      if (selectedSlots.length !== validated.selectedSlotIds.length) {
+        throw new AppError(400, '선택한 일정 중 유효하지 않은 슬롯이 포함되어 있습니다');
+      }
+    } else if (validated.selectedSlots && validated.selectedSlots.length > 0) {
+      const allowedKeys = new Set(
+        proposedSlotsWithFallback.map((slot) => `${slot.date}|${slot.startTime}|${slot.endTime}`)
+      );
+      const requested = validated.selectedSlots.map((slot) => ({
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+      }));
+      const allValid = requested.every((slot) => allowedKeys.has(`${slot.date}|${slot.startTime}|${slot.endTime}`));
+      if (!allValid) {
+        throw new AppError(400, '선택한 일정 중 유효하지 않은 슬롯이 포함되어 있습니다');
+      }
+      selectedSlots = requested;
     }
 
     // 선택한 각 슬롯(날짜)에 대해 외부 일정 충돌 검사
