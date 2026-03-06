@@ -16,6 +16,7 @@ import {
   message,
   Spin,
   Typography,
+  Radio,
 } from 'antd'
 import { DownloadOutlined, EyeOutlined, FormOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { apiA } from '../../utils/apiA'
@@ -46,10 +47,17 @@ interface Interview {
   candidates: Candidate[]
   confirmedSchedule?: { date: string; startTime: string; endTime: string } | null
   myAcceptedAt?: string | null
+  proposedSlots?: Array<{
+    slotId: string
+    date: string
+    startTime: string
+    endTime: string
+  }>
 }
 
 export function InterviewerPortalPage() {
   const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null)
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   const [evaluationCandidate, setEvaluationCandidate] = useState<{ interview: Interview; candidate: Candidate } | null>(null)
   const [isEvaluationDrawerOpen, setIsEvaluationDrawerOpen] = useState(false)
@@ -94,8 +102,14 @@ export function InterviewerPortalPage() {
   }, [evaluationData, isEvaluationDrawerOpen, evalForm])
 
   const acceptScheduleMutation = useMutation({
-    mutationFn: async (interviewId: string) => {
-      const response = await apiA.post(`/interviewer-portal/interviews/${interviewId}/accept-schedule`)
+    mutationFn: async ({ interviewId, selectedSlot }: {
+      interviewId: string
+      selectedSlot?: { date: string; startTime: string; endTime: string }
+    }) => {
+      const response = await apiA.post(
+        `/interviewer-portal/interviews/${interviewId}/accept-schedule`,
+        selectedSlot ? { selectedSlot } : {}
+      )
       return response.data
     },
     onSuccess: () => {
@@ -138,6 +152,7 @@ export function InterviewerPortalPage() {
 
   const handleViewDetail = (interview: Interview) => {
     setSelectedInterview(interview)
+    setSelectedSlotId(null)
     setIsDetailModalOpen(true)
   }
 
@@ -219,7 +234,22 @@ export function InterviewerPortalPage() {
         if (record.myAcceptedAt) {
           return <Tag icon={<CheckCircleOutlined />} color="success">수락 완료</Tag>
         }
-        if (record.status === 'PENDING' || record.status === 'PARTIAL' || record.status === 'CONFIRMED') {
+        if (record.status === 'PENDING' || record.status === 'PARTIAL') {
+          return (
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleViewDetail(record)
+              }}
+            >
+              일정 선택하기
+            </Button>
+          )
+        }
+        if (record.status === 'CONFIRMED') {
           return (
             <Button
               type="primary"
@@ -228,7 +258,7 @@ export function InterviewerPortalPage() {
               loading={acceptScheduleMutation.isPending}
               onClick={(e) => {
                 e.stopPropagation()
-                acceptScheduleMutation.mutate(record.interview_id)
+                acceptScheduleMutation.mutate({ interviewId: record.interview_id })
               }}
             >
               일정 수락하기
@@ -293,10 +323,40 @@ export function InterviewerPortalPage() {
               <Descriptions.Item label="팀명">
                 {selectedInterview.team_name}
               </Descriptions.Item>
-              <Descriptions.Item label="면접 일시">
-                {((selectedInterview.status === 'CONFIRMED' || selectedInterview.status === 'PENDING_APPROVAL') && selectedInterview.confirmedSchedule)
-                  ? `${selectedInterview.confirmedSchedule.date} ${selectedInterview.confirmedSchedule.startTime} ~ ${selectedInterview.confirmedSchedule.endTime}`
-                  : `${selectedInterview.proposed_date} ${selectedInterview.proposed_start_time} ~ ${selectedInterview.proposed_end_time}`}
+              <Descriptions.Item label="제안 일정">
+                {(selectedInterview.status === 'CONFIRMED' || selectedInterview.status === 'PENDING_APPROVAL')
+                  ? ((selectedInterview.confirmedSchedule)
+                      ? `${selectedInterview.confirmedSchedule.date} ${selectedInterview.confirmedSchedule.startTime} ~ ${selectedInterview.confirmedSchedule.endTime}`
+                      : `${selectedInterview.proposed_date} ${selectedInterview.proposed_start_time} ~ ${selectedInterview.proposed_end_time}`)
+                  : (
+                    <Space direction="vertical" style={{ width: '100%' }}>
+                      {(selectedInterview.proposedSlots || []).map(slot => (
+                        <Card
+                          key={slot.slotId}
+                          size="small"
+                          hoverable
+                          onClick={() => setSelectedSlotId(slot.slotId)}
+                          style={{
+                            cursor: 'pointer',
+                            border: selectedSlotId === slot.slotId ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                            backgroundColor: selectedSlotId === slot.slotId ? '#e6f7ff' : 'white',
+                          }}
+                        >
+                          <Space>
+                            <Radio checked={selectedSlotId === slot.slotId} readOnly />
+                            <Text strong>{slot.date}</Text>
+                            <Text>{slot.startTime} ~ {slot.endTime}</Text>
+                          </Space>
+                        </Card>
+                      ))}
+                      {(!selectedInterview.proposedSlots || selectedInterview.proposedSlots.length === 0) && (
+                        <Text type="secondary">
+                          {selectedInterview.proposed_date} {selectedInterview.proposed_start_time} ~ {selectedInterview.proposed_end_time}
+                        </Text>
+                      )}
+                    </Space>
+                  )
+                }
               </Descriptions.Item>
               <Descriptions.Item label="상태">
                 <Tag color={
@@ -320,7 +380,23 @@ export function InterviewerPortalPage() {
                     size="small"
                     icon={<CheckCircleOutlined />}
                     loading={acceptScheduleMutation.isPending}
-                    onClick={() => acceptScheduleMutation.mutate(selectedInterview.interview_id)}
+                    onClick={() => {
+                      if (selectedInterview.status === 'PENDING' || selectedInterview.status === 'PARTIAL') {
+                        const selected = (selectedInterview.proposedSlots || []).find(s => s.slotId === selectedSlotId)
+                        if (!selected && (selectedInterview.proposedSlots?.length ?? 0) > 0) {
+                          message.warning('일정을 선택해주세요')
+                          return
+                        }
+                        acceptScheduleMutation.mutate({
+                          interviewId: selectedInterview.interview_id,
+                          selectedSlot: selected
+                            ? { date: selected.date, startTime: selected.startTime, endTime: selected.endTime }
+                            : undefined,
+                        })
+                      } else {
+                        acceptScheduleMutation.mutate({ interviewId: selectedInterview.interview_id })
+                      }
+                    }}
                   >
                     {selectedInterview.status === 'CONFIRMED' ? '일정 수락하기' : '제안 일정 수락하기'}
                   </Button>

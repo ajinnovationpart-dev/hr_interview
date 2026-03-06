@@ -103,12 +103,41 @@ interviewerPortalRouter.get('/interviews', interviewerAuth, async (req: Request,
             myAcceptedAt = acceptedAt || respondedAt;
           }
         }
+
+        // proposedSlots 조회 (interview_proposed_slots 테이블)
+        let proposedSlots: Array<{ slotId: string; date: string; startTime: string; endTime: string }> = [];
+        try {
+          const getInterviewProposedSlots = (dataService as any).getInterviewProposedSlots;
+          if (typeof getInterviewProposedSlots === 'function') {
+            const slots = await getInterviewProposedSlots.call(dataService, interview.interview_id);
+            if (slots && slots.length > 0) {
+              proposedSlots = slots.map((s: any) => ({
+                slotId: s.slot_id,
+                date: s.slot_date,
+                startTime: String(s.start_time || '').slice(0, 5),
+                endTime: String(s.end_time || '').slice(0, 5),
+              }));
+            }
+          }
+        } catch {
+          // 테이블 없으면 단일 proposed_date로 fallback
+        }
+        // fallback: 단일 슬롯을 배열로 래핑
+        if (proposedSlots.length === 0 && interview.proposed_date) {
+          proposedSlots = [{
+            slotId: 'default',
+            date: interview.proposed_date,
+            startTime: (interview.proposed_start_time || '09:00').slice(0, 5),
+            endTime: (interview.proposed_end_time || '18:00').slice(0, 5),
+          }];
+        }
         
         interviewerInterviews.push({
           ...interview,
           candidates,
           confirmedSchedule,
           myAcceptedAt,
+          proposedSlots,
         });
       }
     }
@@ -205,6 +234,9 @@ interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', intervi
   try {
     const interviewerId = req.user?.interviewerId;
     const { interviewId } = req.params;
+    const { selectedSlot } = req.body as {
+      selectedSlot?: { date: string; startTime: string; endTime: string };
+    };
     if (!interviewerId) {
       throw new AppError(401, '면접관 ID가 없습니다');
     }
@@ -225,36 +257,53 @@ interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', intervi
       throw new AppError(403, '이 면접에 대한 접근 권한이 없습니다');
     }
 
-    await dataService.updateScheduleAcceptedAt(interviewId, interviewerId);
+    if (selectedSlot?.date && selectedSlot?.startTime && selectedSlot?.endTime) {
+      // 1) 기존 time selection 저장
+      const now = Date.now();
+      await dataService.createTimeSelections([{
+        selection_id: `SEL_${now}_0`,
+        interview_id: interviewId,
+        interviewer_id: interviewerId,
+        slot_date: selectedSlot.date,
+        start_time: selectedSlot.startTime,
+        end_time: selectedSlot.endTime,
+      }]);
 
-    // 제안 일정 수락 흐름: 전원 수락 시 확정 대기로 전환 및 확정 예정 일정 생성
-    if (interview.status === 'PENDING' || interview.status === 'PARTIAL') {
-      const mappingsAfter = await dataService.getInterviewInterviewers(interviewId);
-      const allAccepted = mappingsAfter.length > 0 && mappingsAfter.every(
-        (m: any) => m.responded_at || m.accepted_at
-      );
-      if (allAccepted) {
-        const existingSchedule = await dataService.getConfirmedSchedule(interviewId);
-        if (!existingSchedule) {
+      // 2) responded_at 업데이트
+      await dataService.updateRespondedAt(interviewId, interviewerId);
+
+      // 3) 모든 면접관 응답 여부 확인 → 공통 슬롯 계산
+      const { commonSlotService } = await import('../services/commonSlot.service');
+      const mappings = await dataService.getInterviewInterviewers(interviewId);
+      const respondedCount = mappings.filter((m: any) => m.responded_at).length;
+
+      if (respondedCount === mappings.length) {
+        const result = await commonSlotService.findCommonSlots(interviewId);
+        if (result.hasCommon && result.commonSlots.length > 0) {
+          const firstSlot = commonSlotService.sortSlots(result.commonSlots)[0];
           const confirmedAt = new Date().toISOString();
           const interviewCandidates = await dataService.getInterviewCandidates(interviewId);
-          const interviewLatest = await dataService.getInterviewById(interviewId);
-          if (interviewLatest) {
-            for (const ic of interviewCandidates) {
-              await dataService.createConfirmedSchedule({
-                interview_id: interviewId,
-                candidate_id: ic.candidate_id,
-                confirmed_date: interviewLatest.proposed_date || '',
-                confirmed_start_time: ic.scheduled_start_time || interviewLatest.proposed_start_time || '',
-                confirmed_end_time: ic.scheduled_end_time || interviewLatest.proposed_end_time || '',
-                confirmed_at: confirmedAt,
-              });
-            }
-            await dataService.updateInterviewStatus(interviewId, 'PENDING_APPROVAL');
+          for (const ic of interviewCandidates) {
+            await dataService.createConfirmedSchedule({
+              interview_id: interviewId,
+              candidate_id: ic.candidate_id,
+              confirmed_date: firstSlot.date,
+              confirmed_start_time: ic.scheduled_start_time || firstSlot.startTime,
+              confirmed_end_time: ic.scheduled_end_time || firstSlot.endTime,
+              confirmed_at: confirmedAt,
+            });
           }
+          await dataService.updateInterviewStatus(interviewId, 'PENDING_APPROVAL');
+        } else {
+          await dataService.updateInterviewStatus(interviewId, 'NO_COMMON');
         }
+      } else {
+        await dataService.updateInterviewStatus(interviewId, 'PARTIAL');
       }
     }
+
+    // 기존 accepted_at 업데이트는 그대로 유지
+    await dataService.updateScheduleAcceptedAt(interviewId, interviewerId);
 
     res.json({
       success: true,
