@@ -104,25 +104,20 @@ interviewerPortalRouter.get('/interviews', interviewerAuth, async (req: Request,
           }
         }
 
-        // proposedSlots 조회 (interview_proposed_slots 테이블)
         let proposedSlots: Array<{ slotId: string; date: string; startTime: string; endTime: string }> = [];
         try {
-          const getInterviewProposedSlots = (dataService as any).getInterviewProposedSlots;
-          if (typeof getInterviewProposedSlots === 'function') {
-            const slots = await getInterviewProposedSlots.call(dataService, interview.interview_id);
-            if (slots && slots.length > 0) {
-              proposedSlots = slots.map((s: any) => ({
-                slotId: s.slot_id,
-                date: s.slot_date,
-                startTime: String(s.start_time || '').slice(0, 5),
-                endTime: String(s.end_time || '').slice(0, 5),
-              }));
-            }
+          const slots = await (dataService as any).getInterviewProposedSlots(interview.interview_id);
+          if (slots && slots.length > 0) {
+            proposedSlots = slots.map((s: any) => ({
+              slotId: s.slot_id,
+              date: s.slot_date,
+              startTime: (s.start_time || '').slice(0, 5),
+              endTime: (s.end_time || '').slice(0, 5),
+            }));
           }
         } catch {
-          // 테이블 없으면 단일 proposed_date로 fallback
+          // 테이블 없으면 fallback
         }
-        // fallback: 단일 슬롯을 배열로 래핑
         if (proposedSlots.length === 0 && interview.proposed_date) {
           proposedSlots = [{
             slotId: 'default',
@@ -234,9 +229,7 @@ interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', intervi
   try {
     const interviewerId = req.user?.interviewerId;
     const { interviewId } = req.params;
-    const { selectedSlot } = req.body as {
-      selectedSlot?: { date: string; startTime: string; endTime: string };
-    };
+    const { selectedSlot } = req.body;
     if (!interviewerId) {
       throw new AppError(401, '면접관 ID가 없습니다');
     }
@@ -273,7 +266,7 @@ interviewerPortalRouter.post('/interviews/:interviewId/accept-schedule', intervi
       await dataService.updateRespondedAt(interviewId, interviewerId);
 
       // 3) 모든 면접관 응답 여부 확인 → 공통 슬롯 계산
-      const { commonSlotService } = await import('../services/commonSlot.service');
+      const { commonSlotService } = require('../services/commonSlot.service');
       const mappings = await dataService.getInterviewInterviewers(interviewId);
       const respondedCount = mappings.filter((m: any) => m.responded_at).length;
 
